@@ -1,0 +1,15 @@
+# Credentials — never commit the real config
+config.js
+FaultsAssignedToMyWG_*.csv
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

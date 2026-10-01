@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Fault Ticket Dashboard</title>
+    <script src="config.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="papaparse.min.js"></script>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <link rel="stylesheet" href="styles.css">
+  
+    
+</head>
+
+<body>
+    <div id="dashboardLoginOverlay" class="login-overlay" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.72); display: flex; align-items: center; justify-content: center; z-index: 2000;">
+        <div style="background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(15,23,42,0.25); width:min(440px, calc(100% - 32px)); padding:30px;">
+            <h2 style="margin-bottom: 18px; color:#1d4ed8;">Technician Login</h2>
+            <form id="dashboardLoginForm">
+                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+                    <label for="dashboardServiceNumber" style="font-weight:700; color:#374151;">Service Number</label>
+                    <input id="dashboardServiceNumber" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit service number" required style="padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:15px;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+                    <label for="dashboardPassword" style="font-weight:700; color:#374151;">Password</label>
+                    <input id="dashboardPassword" type="password" placeholder="Password" autocomplete="current-password" required style="padding:12px 14px; border:1px solid #cbd5e1; border-radius:10px; font-size:15px;">
+                </div>
+                <button type="submit" class="modern-btn" style="width:100%; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);">Log In</button>
+                <div id="dashboardLoginError" aria-live="polite" style="min-height:20px; margin-top:12px; color:#b91c1c; font-weight:600;"></div>
+            </form>
+        </div>
+    </div>
+
+    <div class="app-shell" style="display: none;">
+        <header class="app-header">
+            <div class="header-copy">
+                <span class="eyebrow">Copper Fault Operations</span>
+                <h1>Fault Ticket Dashboard</h1>
+                <p class="header-subtitle">Upload your ticket CSV and review active counts, alarm severity, and filtered details in one modern dashboard.</p>
+                <button id="updateCloudBtn" class="modern-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">Update Cloud for Field</button>
+                <button id="logoutDashboardBtn" class="modern-btn secondary-btn" style="margin-left: 10px;">Log Out</button>
+            </div>
+            <div class="header-status">
+                <div class="status-card">
+                    <span class="status-label">Current Time</span>
+                    <strong class="status-value" id="current-time">00:00:00</strong>
+                </div>
+                <div class="status-card status-secondary">
+                    <span class="status-label">CSV Modified</span>
+                    <strong class="status-value" id="csv-modified-time">Not loaded</strong>
+                </div>
+                <div class="status-card status-secondary">
+                    <span class="status-label">Cloud Updated</span>
+                    <strong class="status-value" id="cloud-updated-time">Not synced</strong>
+                </div>
+            </div>
+            <!-- Mobile-Friendly Ticket Detail Popup Modal -->
+            <div id="ticketModal" class="modal-overlay" style="display: none;">
+             <div class="modal-content">
+              <div class="modal-header">
+               <h3>Ticket Details</h3>
+               <button id="closeModalBtn" class="modern-btn red-btn" style="padding: 4px 10px; font-size: 12px;">Close</button>
+             </div>
+            <div class="modal-body" id="modalTicketDetails">
+            <!-- Dynamic ticket fields will load here -->
+        </div>
+    </div>
+</div>
+        </header>
+
+        <section class="upload-panel">
+            <div class="upload-card">
+                <label class="file-upload">
+                    <span class="upload-icon">📄</span>
+                    <span class="upload-text">Drop or choose a CSV file to refresh the dashboard</span>
+                    <input type="file" id="csvFile" accept=".csv" onchange="handleFile()" />
+                </label>
+                <p class="upload-help">Supported file type: .csv</p>
+            </div>
+        </section>
+
+        <section class="top-controls">
+            <div class="save-load-bar">
+                <button id="printTable" class="modern-btn secondary-btn">Print Table</button>
+                <label class="version-control" for="snapshotVersion">
+                    <span>Cloud version</span>
+                    <select id="snapshotVersion" class="modern-dropdown" disabled>
+                        <option value="">Load cloud data to see versions</option>
+                    </select>
+                </label>
+            </div>
+        </section>
+
+        <section id="adminUserPanel" class="admin-user-panel" hidden>
+            <div>
+                <h2>Add Technician Account</h2>
+                <p>Create a sign-in for a 6-digit service number.</p>
+            </div>
+            <form id="addUserForm" class="admin-user-form">
+                <label for="newUserServiceNumber">Service number
+                    <input id="newUserServiceNumber" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="off" required>
+                </label>
+                <label for="newUserPassword">Temporary password
+                    <input id="newUserPassword" type="password" autocomplete="new-password" minlength="10" required>
+                </label>
+                <button type="submit" class="modern-btn">Add User</button>
+            </form>
+            <p class="admin-user-policy">Password must have at least 10 characters, including uppercase, lowercase, a number, and a special character.</p>
+            <p id="addUserMessage" class="admin-user-message" aria-live="polite"></p>
+        </section>
+
+        <section class="dashboard-grid">
+            <div class="info-card" id="gldu-ftth-card">
+                <div class="card-header"><span>GL/DU</span><span class="tag">FTTH</span></div>
+                <div class="card-metrics">
+                    <div><span>Open</span><strong id="gldu-ftth-open" class="info-value">0</strong></div>
+                    <div><span>Ack</span><strong id="gldu-ftth-ack" class="info-value">0</strong></div>
+                    <div><span>Clear</span><strong id="gldu-ftth-clear" class="info-value">0</strong></div>
+                </div>
+                <div class="alarm-container">
+                    <div class="alarm-bulb minor-alarm-bulb" id="gldu-ftth-minor-bulb"><span class="alarm-count" id="gldu-ftth-minor-count">0</span></div>
+                    <div class="alarm-bulb major-alarm-bulb" id="gldu-ftth-major-bulb"><span class="alarm-count" id="gldu-ftth-major-count">0</span></div>
+                    <div class="alarm-bulb critical-alarm-bulb" id="gldu-ftth-critical-bulb"><span class="alarm-count" id="gldu-ftth-critical-count">0</span></div>
+                </div>
+            </div>
+
+            <div class="info-card" id="unwharim-ftth-card">
+                <div class="card-header"><span>UNW/HAR/IM</span><span class="tag">FTTH</span></div>
+                <div class="card-metrics">
+                    <div><span>Open</span><strong id="unwharim-ftth-open" class="info-value">0</strong></div>
+                    <div><span>Ack</span><strong id="unwharim-ftth-ack" class="info-value">0</strong></div>
+                    <div><span>Clear</span><strong id="unwharim-ftth-clear" class="info-value">0</strong></div>
+                </div>
+                <div class="alarm-container">
+                    <div class="alarm-bulb minor-alarm-bulb" id="unwharim-ftth-minor-bulb"><span class="alarm-count" id="unwharim-ftth-minor-count">0</span></div>
+                    <div class="alarm-bulb major-alarm-bulb" id="unwharim-ftth-major-bulb"><span class="alarm-count" id="unwharim-ftth-major-count">0</span></div>
+                    <div class="alarm-bulb critical-alarm-bulb" id="unwharim-ftth-critical-bulb"><span class="alarm-count" id="unwharim-ftth-critical-count">0</span></div>
+                </div>
+            </div>
+
+            <div class="info-card" id="gldu-card">
+                <div class="card-header"><span>GL/DU</span></div>
+                <div class="card-metrics">
+                    <div><span>Open</span><strong id="gldu-open" class="info-value">0</strong></div>
+                    <div><span>Ack</span><strong id="gldu-ack" class="info-value">0</strong></div>
+                    <div><span>Clear</span><strong id="gldu-clear" class="info-value">0</strong></div>
+                </div>
+                <div class="alarm-container">
+                    <div class="alarm-bulb minor-alarm-bulb" id="gldu-minor-bulb"><span class="alarm-count" id="gldu-minor-count">0</span></div>
+                    <div class="alarm-bulb major-alarm-bulb" id="gldu-major-bulb"><span class="alarm-count" id="gldu-major-count">0</span></div>
+                    <div class="alarm-bulb critical-alarm-bulb" id="gldu-critical-bulb"><span class="alarm-count" id="gldu-critical-count">0</span></div>
+                </div>
+            </div>
+
+            <div class="info-card" id="unwhar-card">
+                <div class="card-header"><span>UNW/HAR</span></div>
+                <div class="card-metrics">
+                    <div><span>Open</span><strong id="unwhar-open" class="info-value">0</strong></div>
+                    <div><span>Ack</span><strong id="unwhar-ack" class="info-value">0</strong></div>
+                    <div><span>Clear</span><strong id="unwhar-clear" class="info-value">0</strong></div>
+                </div>
+                <div class="alarm-container">
+                    <div class="alarm-bulb minor-alarm-bulb" id="unwhar-minor-bulb"><span class="alarm-count" id="unwhar-minor-count">0</span></div>
+                    <div class="alarm-bulb major-alarm-bulb" id="unwhar-major-bulb"><span class="alarm-count" id="unwhar-major-count">0</span></div>
+                    <div class="alarm-bulb critical-alarm-bulb" id="unwhar-critical-bulb"><span class="alarm-count" id="unwhar-critical-count">0</span></div>
+                </div>
+            </div>
+
+            <div class="info-card" id="umnf-card">
+                <div class="card-header"><span>UM/NF</span></div>
+                <div class="card-metrics">
+                    <div><span>Open</span><strong id="umnf-open" class="info-value">0</strong></div>
+                    <div><span>Ack</span><strong id="umnf-ack" class="info-value">0</strong></div>
+                    <div><span>Clear</span><strong id="umnf-clear" class="info-value">0</strong></div>
+                </div>
+                <div class="alarm-container">
+                    <div class="alarm-bulb minor-alarm-bulb" id="umnf-minor-bulb"><span class="alarm-count" id="umnf-minor-count">0</span></div>
+                    <div class="alarm-bulb major-alarm-bulb" id="umnf-major-bulb"><span class="alarm-count" id="umnf-major-count">0</span></div>
+                    <div class="alarm-bulb critical-alarm-bulb" id="umnf-critical-bulb"><span class="alarm-count" id="umnf-critical-count">0</span></div>
+                </div>
+            </div>
+
+            <div class="info-card" id="im-card">
+                <div class="card-header"><span>IM</span></div>
+                <div class="card-metrics">
+                    <div><span>Open</span><strong id="im-open" class="info-value">0</strong></div>
+                    <div><span>Ack</span><strong id="im-ack" class="info-value">0</strong></div>
+                    <div><span>Clear</span><strong id="im-clear" class="info-value">0</strong></div>
+                </div>
+                <div class="alarm-container">
+                    <div class="alarm-bulb minor-alarm-bulb" id="im-minor-bulb"><span class="alarm-count" id="im-minor-count">0</span></div>
+                    <div class="alarm-bulb major-alarm-bulb" id="im-major-bulb"><span class="alarm-count" id="im-major-count">0</span></div>
+                    <div class="alarm-bulb critical-alarm-bulb" id="im-critical-bulb"><span class="alarm-count" id="im-critical-count">0</span></div>
+                </div>
+            </div>
+
+            <div class="info-card" id="4g-card">
+                <div class="card-header"><span>4G</span></div>
+                <div class="card-metrics">
+                    <div><span>Open</span><strong id="4g-open" class="info-value">0</strong></div>
+                    <div><span>Ack</span><strong id="4g-ack" class="info-value">0</strong></div>
+                    <div><span>Clear</span><strong id="4g-clear" class="info-value">0</strong></div>
+                </div>
+                <div class="alarm-container">
+                    <div class="alarm-bulb minor-alarm-bulb" id="4g-minor-bulb"><span class="alarm-count" id="4g-minor-count">0</span></div>
+                    <div class="alarm-bulb major-alarm-bulb" id="4g-major-bulb"><span class="alarm-count" id="4g-major-count">0</span></div>
+                    <div class="alarm-bulb critical-alarm-bulb" id="4g-critical-bulb"><span class="alarm-count" id="4g-critical-count">0</span></div>
+                </div>
+            </div>
+
+            <div class="info-card" id="ug-card">
+                <div class="card-header"><span>UG Fault</span></div>
+                <div class="card-metrics">
+                    <div><span>Open</span><strong id="ug-open" class="info-value">0</strong></div>
+                    <div><span>Ack</span><strong id="ug-ack" class="info-value">0</strong></div>
+                    <div><span>Clear</span><strong id="ug-clear" class="info-value">0</strong></div>
+                </div>
+                <div class="alarm-container">
+                    <div class="alarm-bulb minor-alarm-bulb" id="ug-minor-bulb"><span class="alarm-count" id="ug-minor-count">0</span></div>
+                    <div class="alarm-bulb major-alarm-bulb" id="ug-major-bulb"><span class="alarm-count" id="ug-major-count">0</span></div>
+                    <div class="alarm-bulb critical-alarm-bulb" id="ug-critical-bulb"><span class="alarm-count" id="ug-critical-count">0</span></div>
+                </div>
+            </div>
+            <div class="info-card analytics-card" id="analytics-card">
+                <div class="card-header"><span>Total Tickets Distribution</span><span class="tag">Overview</span></div>
+                <div class="card-metrics">
+                    <div><span>Pending</span><strong id="analytics-pending-count" class="info-value">0</strong></div>
+                    <div><span>Need CPE</span><strong id="analytics-need-cpe-count" class="info-value">0</strong></div>
+                </div>
+                <div class="analytics-charts">
+                    <div class="chart-container" id="totalTicketsPieChart"></div>
+                    <div class="chart-container" id="pendingNeedCpePieChart"></div>
+                </div>
+            </div>
+            <div class="info-card trend-card" id="workload-trend-card" hidden>
+                <div class="card-header"><span id="workload-trend-title">Workload Trend</span><span class="tag">Today</span></div>
+                <p id="workload-trend-message" class="trend-message">Select a category card to view its history.</p>
+                <div class="chart-container trend-chart-container" id="workloadTrendChart"></div>
+            </div>
+        </section>
+        </section>
+
+        <section class="table-panel">
+            <div class="table-headline">
+                <div>
+                    <h2>Ticket Details</h2>
+                    <p class="table-note">No filter selected shows all tickets. Click a card to filter by category.</p>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table id="output">
+                    <thead></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+    <script src="script.js"></script>
+</body>
+</html>
