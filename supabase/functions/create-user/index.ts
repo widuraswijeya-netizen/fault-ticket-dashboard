@@ -38,7 +38,7 @@ denoRuntime.Deno!.serve(async (request: Request) => {
 
   const supabaseUrl = denoRuntime.Deno!.env.get(https://xdjifpqrpzdfzylhcofs.supabase.co)!;
   const anonKey = denoRuntime.Deno!.env.get(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkamlmcHFycHpkZnp5bGhjb2ZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4MzUxODUsImV4cCI6MjEwNjQxMTE4NX0.UBinfEPcJwMIZ71UmEUm3NxJRUlfdME-ldGYV3dGsQM)!;
-  const serviceRoleKey = denoRuntime.Deno!.env.get(sb_secret_jmnMECTFYkB9Evk-itUP7A_nFWD-RWv)!;
+  const serviceRoleKey = denoRuntime.Deno!.env.get(eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhkamlmcHFycHpkZnp5bGhjb2ZzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MDgzNTE4NSwiZXhwIjoyMTA2NDExMTg1fQ.yjAh9jVXcC9wJLGIDihspvLUsqfsYIetbUvnkrrskWg)!;
   const callerClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authorization } },
     auth: { persistSession: false, autoRefreshToken: false },
