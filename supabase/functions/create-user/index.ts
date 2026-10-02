@@ -36,7 +36,7 @@ denoRuntime.Deno!.serve(async (request: Request) => {
     return jsonResponse({ error: "Authentication required." }, 401);
   }
 
-  const supabaseUrl = denoRuntime.Deno!.env.get("SUPABASE_URL")!;
+  const supabaseUrl = denoRuntime.Deno!.env.get(https://xdjifpqrpzdfzylhcofs.supabase.co)!;
   const anonKey = denoRuntime.Deno!.env.get("SUPABASE_ANON_KEY")!;
   const serviceRoleKey = denoRuntime.Deno!.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const callerClient = createClient(supabaseUrl, anonKey, {
