@@ -37,8 +37,8 @@ denoRuntime.Deno!.serve(async (request: Request) => {
   }
 
   const supabaseUrl = denoRuntime.Deno!.env.get(https://xdjifpqrpzdfzylhcofs.supabase.co)!;
-  const anonKey = denoRuntime.Deno!.env.get("SUPABASE_ANON_KEY")!;
-  const serviceRoleKey = denoRuntime.Deno!.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const anonKey = denoRuntime.Deno!.env.get(Project_ANON_KEY)!;
+  const serviceRoleKey = denoRuntime.Deno!.env.get(sb_secret_jmnMECTFYkB9Evk-itUP7A_nFWD-RWv)!;
   const callerClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authorization } },
     auth: { persistSession: false, autoRefreshToken: false },
