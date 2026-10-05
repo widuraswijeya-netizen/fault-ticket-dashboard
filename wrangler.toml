@@ -1,5 +1,7 @@
 name = "fault-ticket-dashboard"
 compatibility_date = "2026-10-05"
+main = "index.ts"
 
 [assets]
-directory = "./public"
+directory = "./public/"
+binding = "ASSETS"
