@@ -2,7 +2,7 @@ if (window.google && window.google.charts) {
     google.charts.load('current', { packages: ['corechart'] });
 }
 
-const AUTH_EMAIL_DOMAIN = '@fault-dashboard.example.com';
+const AUTH_EMAIL_DOMAIN = '@intranet.slt.com.lk';
 const PASSWORD_POLICY_MESSAGE = 'Use at least 10 characters with an uppercase letter, a lowercase letter, a number, and a special character.';
 
 function serviceNumberToEmail(serviceNumber) {
