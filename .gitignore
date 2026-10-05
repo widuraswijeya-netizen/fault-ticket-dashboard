@@ -1,5 +1,4 @@
 # Credentials — never commit the real config
-config.js
 FaultsAssignedToMyWG_*.csv
 
 # OS files
