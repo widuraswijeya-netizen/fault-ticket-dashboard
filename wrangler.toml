@@ -1,7 +1,13 @@
-name = "fault-ticket-dashboard"
-compatibility_date = "2026-10-05"
-main = "index.ts"
+name = "fault-dashboard-test"
+main = "src/worker.ts"
+compatibility_date = "2026-10-06"
 
 [assets]
 directory = "./public/"
 binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "USERS_DB"
+database_name = "fault-dashboard-users"
+database_id = "56ca6ce1-a4f5-4a8a-94ec-8eb75b191ded"
