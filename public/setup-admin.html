@@ -47,7 +47,7 @@ form.addEventListener("submit",async e=>{
   if(r.ok){
     msg.textContent="Administrator initialized successfully. You can now return to the dashboard and log in with service number 013633.";
     form.remove();
-  }else msg.textContent=data.error||"Setup failed.";
+  }else msg.textContent=(data.error||"Setup failed.")+(data.diagnostic?" — "+data.diagnostic:"");
 });
 </script>
 </body>
