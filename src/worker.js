@@ -180,6 +180,101 @@ async function handleAdminCreateUser(request, env) {
   return jsonResponse({ serviceNumber, role: "technician" }, 201);
 }
 
+
+const SUPABASE_URL = "https://xdjifpqrpzdfzylhcofs.supabase.co";
+
+async function supabaseRequest(env, path, options = {}) {
+  if (!env.SUPABASE_SECRET_KEY) {
+    throw new Error("Supabase server secret is not configured.");
+  }
+  const headers = new Headers(options.headers || {});
+  headers.set("apikey", env.SUPABASE_SECRET_KEY);
+  headers.set("Authorization", "Bearer " + env.SUPABASE_SECRET_KEY);
+  if (options.body !== undefined) headers.set("Content-Type", "application/json");
+  const response = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
+    method: options.method || "GET",
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+  });
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+  if (!response.ok) {
+    const detail = data?.message || data?.hint || data?.details || text || ("HTTP " + response.status);
+    throw new Error("Supabase request failed (" + response.status + "): " + detail);
+  }
+  return data;
+}
+
+async function requireSession(request, env) {
+  const user = await getSessionUser(request, env);
+  if (!user) return null;
+  return user;
+}
+
+async function handleCloudState(request, env) {
+  const user = await requireSession(request, env);
+  if (!user) return jsonResponse({ error: "Authentication required." }, 401);
+
+  try {
+    if (request.method === "GET") {
+      const rows = await supabaseRequest(env, "app_state?select=tickets,updated_at&id=eq.1");
+      return jsonResponse(rows?.[0] || null);
+    }
+    if (request.method !== "PUT") return jsonResponse({ error: "Method not allowed." }, 405);
+
+    const payload = await request.json();
+    const tickets = Array.isArray(payload.tickets) ? payload.tickets : [];
+    const updatedAt = String(payload.updated_at || new Date().toISOString());
+
+    await supabaseRequest(env, "app_state?on_conflict=id", {
+      method: "POST",
+      headers: { "Prefer": "resolution=merge-duplicates,return=minimal" },
+      body: { id: 1, tickets, updated_at: updatedAt },
+    });
+    return jsonResponse({ ok: true, updated_at: updatedAt });
+  } catch (error) {
+    console.error("Cloud state request failed:", error);
+    return jsonResponse({ error: String(error.message || error) }, 502);
+  }
+}
+
+async function handleCloudSnapshots(request, env) {
+  const user = await requireSession(request, env);
+  if (!user) return jsonResponse({ error: "Authentication required." }, 401);
+
+  try {
+    const url = new URL(request.url);
+    if (request.method === "GET") {
+      const start = url.searchParams.get("start");
+      const end = url.searchParams.get("end");
+      if (!start || !end) return jsonResponse({ error: "start and end are required." }, 400);
+      const path = "app_snapshots?select=id,captured_at,csv_modified_at,tickets"
+        + "&captured_at=gte." + encodeURIComponent(start)
+        + "&captured_at=lt." + encodeURIComponent(end)
+        + "&order=captured_at.asc";
+      const rows = await supabaseRequest(env, path);
+      return jsonResponse(rows || []);
+    }
+
+    if (request.method !== "POST") return jsonResponse({ error: "Method not allowed." }, 405);
+    const payload = await request.json();
+    const tickets = Array.isArray(payload.tickets) ? payload.tickets : [];
+    const capturedAt = String(payload.captured_at || new Date().toISOString());
+    const csvModifiedAt = payload.csv_modified_at ? String(payload.csv_modified_at) : null;
+
+    await supabaseRequest(env, "app_snapshots", {
+      method: "POST",
+      headers: { "Prefer": "return=minimal" },
+      body: { captured_at: capturedAt, csv_modified_at: csvModifiedAt, tickets },
+    });
+    return jsonResponse({ ok: true });
+  } catch (error) {
+    console.error("Cloud snapshots request failed:", error);
+    return jsonResponse({ error: String(error.message || error) }, 502);
+  }
+}
+
 async function handleSetupAdmin(request, env) {
   if (request.method !== "POST") return jsonResponse({ error: "Method not allowed." }, 405);
 
@@ -227,6 +322,8 @@ async function handleApi(request, env) {
   if (url.pathname === "/api/me") return handleMe(request, env);
   if (url.pathname === "/api/logout") return handleLogout(request, env);
   if (url.pathname === "/api/admin/users") return handleAdminCreateUser(request, env);
+  if (url.pathname === "/api/cloud/state") return handleCloudState(request, env);
+  if (url.pathname === "/api/cloud/snapshots") return handleCloudSnapshots(request, env);
   return null;
 }
 
