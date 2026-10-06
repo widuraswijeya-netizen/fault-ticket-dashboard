@@ -1,7 +1,7 @@
 const SESSION_COOKIE = "fd_session";
 const SESSION_HOURS = 8;
 const SESSION_MAX_AGE = SESSION_HOURS * 60 * 60;
-const PBKDF2_ITERATIONS = 210000;
+const PBKDF2_ITERATIONS = 100000;
 
 function jsonResponse(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -216,7 +216,6 @@ async function handleSetupAdmin(request, env) {
     console.error("initial admin setup failed:", error);
     return jsonResponse({
       error: "Unable to initialize the administrator account.",
-      diagnostic: String(error),
     }, 500);
   }
 }
