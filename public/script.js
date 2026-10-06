@@ -113,9 +113,31 @@ function setupAuth() {
 
             submitButton.disabled = true;
             message.textContent = 'Creating account...';
-            const { error } = await supabaseClient.functions.invoke('create-user', {
-                body: { serviceNumber, password }
+            const { data: sessionData } = await supabaseClient.auth.getSession();
+            const accessToken = sessionData.session?.access_token;
+
+            if (!accessToken) {
+                submitButton.disabled = false;
+                message.textContent = 'Your session has expired. Please log in again.';
+                return;
+            }
+
+            const response = await fetch('/api/create-user', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ serviceNumber, password })
             });
+
+            const result = await response.json().catch(() => ({}));
+            submitButton.disabled = false;
+
+            if (!response.ok) {
+                message.textContent = result.error || 'Could not create the account.';
+                return;
+            }
             submitButton.disabled = false;
 
             if (error) {
