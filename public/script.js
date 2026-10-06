@@ -162,11 +162,6 @@ function showToast(message, type = 'info', duration = 4000) {
     }, duration);
 }
 
-const supabaseUrl = typeof APP_CONFIG !== 'undefined' ? APP_CONFIG.SUPABASE_URL : '';
-const supabaseKey = typeof APP_CONFIG !== 'undefined' ? APP_CONFIG.SUPABASE_ANON_KEY : '';
-const supabaseClient = window.supabase && supabaseUrl && supabaseKey
-    ? window.supabase.createClient(supabaseUrl, supabaseKey)
-    : null;
 let dailySnapshots = [];
 let viewingHistoricalSnapshot = false;
 let csvModifiedAt = null;
@@ -218,20 +213,18 @@ function formatSnapshotTime(snapshot) {
 
 async function loadDailySnapshots() {
     const selector = document.getElementById('snapshotVersion');
-    if (!supabaseClient || !selector) return;
+    if (!selector) return;
 
     const { start, end } = getLocalDayBounds();
     try {
-        const { data, error } = await supabaseClient
-            .from('app_snapshots')
-            .select('id, captured_at, csv_modified_at, tickets')
-            .gte('captured_at', start)
-            .lt('captured_at', end)
-            .order('captured_at', { ascending: true });
+        const response = await fetch('/api/cloud/snapshots?start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end), {
+            credentials: 'include',
+            cache: 'no-store'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to load cloud history.');
 
-        if (error) throw error;
-
-        dailySnapshots = data || [];
+        dailySnapshots = Array.isArray(result) ? result : [];
         selector.replaceChildren();
 
         if (dailySnapshots.length === 0) {
@@ -252,12 +245,9 @@ async function loadDailySnapshots() {
         renderWorkloadChart();
     } catch (error) {
         dailySnapshots = [];
-        const message = error.code === 'PGRST205'
-            ? 'Setup required: run supabase_snapshots.sql in Supabase'
-            : 'History unavailable - check Supabase access';
-        selector.replaceChildren(new Option(message, ''));
+        selector.replaceChildren(new Option('History unavailable - check cloud access', ''));
         selector.disabled = true;
-        console.error('Unable to load today\'s snapshots.', error);
+        console.error("Unable to load today's snapshots.", error);
         renderWorkloadChart();
     }
 }
@@ -290,10 +280,6 @@ async function updateCloudData() {
         return showToast('You are viewing an older version. Select today\'s latest version or load a new CSV before syncing.', 'warning', 7000);
     }
 
-    if (!supabaseClient) {
-        return showToast('Supabase not initialized. Check config.js', 'error');
-    }
-
     const optimizedTickets = fullData.map(row => ({
         "Priority": row["Priority"] || "",
         "Circuit Display Name": row["Circuit Display Name"] || "",
@@ -313,30 +299,30 @@ async function updateCloudData() {
 
     const capturedAt = new Date().toISOString();
     try {
-        const { error } = await supabaseClient
-            .from('app_state')
-            .upsert({ 
-                id: 1, 
-                tickets: optimizedTickets, 
-                updated_at: capturedAt
-            });
+        const stateResponse = await fetch('/api/cloud/state', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ tickets: optimizedTickets, updated_at: capturedAt })
+        });
+        const stateResult = await stateResponse.json().catch(() => ({}));
+        if (!stateResponse.ok) throw new Error(stateResult.error || 'Cloud state update failed.');
 
-        if (error) throw error;
-
-        const { error: snapshotError } = await supabaseClient
-            .from('app_snapshots')
-            .insert({
+        const snapshotResponse = await fetch('/api/cloud/snapshots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
                 captured_at: capturedAt,
                 csv_modified_at: csvModifiedAt || null,
                 tickets: optimizedTickets
-            });
+            })
+        });
+        const snapshotResult = await snapshotResponse.json().catch(() => ({}));
 
-        if (snapshotError) {
-            console.error('Cloud updated, but the history snapshot was not saved.', snapshotError);
-            const message = snapshotError.code === '42703'
-                ? 'Cloud updated, but app_snapshots needs the csv_modified_at column. Rerun the updated supabase_snapshots.sql.'
-                : 'Cloud updated, but history could not be saved. Check app_snapshots permissions and setup.';
-            showToast(message, 'warning', 9000);
+        if (!snapshotResponse.ok) {
+            console.error('Cloud updated, but the history snapshot was not saved.', snapshotResult);
+            showToast('Cloud updated, but history could not be saved. ' + (snapshotResult.error || ''), 'warning', 9000);
             return;
         }
 
@@ -345,27 +331,22 @@ async function updateCloudData() {
         await loadDailySnapshots();
         showToast('Cloud updated and today\'s version saved.', 'success');
     } catch (error) {
-        console.error('Supabase Error:', error);
-        showToast('Failed to update cloud storage. See console for details.', 'error');
+        console.error('Cloud Error:', error);
+        showToast('Failed to update cloud storage. ' + (error.message || ''), 'error', 9000);
     }
 }
 
 async function loadCloudData() {
-    if (!supabaseClient) return;
-    
     try {
-        const { data, error } = await supabaseClient
-            .from('app_state')
-            .select('tickets, updated_at')
-            .eq('id', 1)
-            .single();
+        const response = await fetch('/api/cloud/state', {
+            credentials: 'include',
+            cache: 'no-store'
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to load cloud data.');
 
-        if (error) {
-            if (error.code !== 'PGRST116') throw error;
-            return;
-        }
-
-        if (data && data.tickets && data.tickets.length > 0) {
+        const data = result;
+        if (data && Array.isArray(data.tickets) && data.tickets.length > 0) {
             fullData = data.tickets;
             updateDashboard(fullData);
             renderTable();
@@ -378,14 +359,12 @@ async function loadCloudData() {
                     String(updateTime.getHours()).padStart(2, '0') + ':' +
                     String(updateTime.getMinutes()).padStart(2, '0');
                 const cloudTimeEl = document.getElementById("cloud-updated-time");
-                if (cloudTimeEl) {
-                    cloudTimeEl.textContent = formattedTime;
-                }
+                if (cloudTimeEl) cloudTimeEl.textContent = formattedTime;
             }
         }
         await loadDailySnapshots();
     } catch (error) {
-        console.error('No cloud data found or offline.', error);
+        console.error('No cloud data found or cloud access failed.', error);
     }
 }
 
