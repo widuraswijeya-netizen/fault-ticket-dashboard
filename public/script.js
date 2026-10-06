@@ -2,21 +2,14 @@ if (window.google && window.google.charts) {
     google.charts.load('current', { packages: ['corechart'] });
 }
 
-const AUTH_EMAIL_DOMAIN = '@intranet.slt.com.lk';
 const PASSWORD_POLICY_MESSAGE = 'Use at least 10 characters with an uppercase letter, a lowercase letter, a number, and a special character.';
-
-function serviceNumberToEmail(serviceNumber) {
-    const normalizedServiceNumber = String(serviceNumber || '').trim();
-    const configuredEmail = APP_CONFIG.SERVICE_EMAILS?.[normalizedServiceNumber];
-    return configuredEmail || `${normalizedServiceNumber}${AUTH_EMAIL_DOMAIN}`;
-}
 
 function hasStrongPassword(password) {
     return password.length >= 10 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password);
 }
 
 function setAuthenticatedUser(user) {
-    const serviceNumber = user?.app_metadata?.service_number;
+    const serviceNumber = user?.serviceNumber;
     const validUser = /^\d{6}$/.test(String(serviceNumber || ''));
     const overlay = document.getElementById('dashboardLoginOverlay');
     const appShell = document.querySelector('.app-shell');
@@ -24,71 +17,82 @@ function setAuthenticatedUser(user) {
 
     if (overlay) overlay.style.display = validUser ? 'none' : 'flex';
     if (appShell) appShell.style.display = validUser ? 'block' : 'none';
-    if (adminPanel) adminPanel.hidden = !validUser || user.app_metadata.role !== 'admin';
+    if (adminPanel) adminPanel.hidden = !validUser || user.role !== 'admin';
 
     return validUser;
 }
 
 async function signInWithServiceNumber(serviceNumber, password, errorElement) {
-    if (!supabaseClient) {
-        if (errorElement) errorElement.textContent = 'Authentication is not configured. Check the Supabase setup.';
-        return false;
-    }
-    if (!/^\d{6}$/.test(String(serviceNumber || '').trim())) {
+    serviceNumber = String(serviceNumber || '').trim();
+    if (!/^\d{6}$/.test(serviceNumber)) {
         if (errorElement) errorElement.textContent = 'Enter a valid 6-digit service number.';
         return false;
     }
 
-    const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email: serviceNumberToEmail(serviceNumber),
-        password
-    });
-    if (error || !data.user) {
-        if (errorElement) errorElement.textContent = 'Service number or password is incorrect.';
-        return false;
-    }
-    if (data.user.app_metadata?.service_number !== String(serviceNumber).trim()) {
-        await supabaseClient.auth.signOut();
-        if (errorElement) errorElement.textContent = 'This account is not provisioned for dashboard access.';
-        return false;
-    }
+    try {
+        const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ serviceNumber, password })
+        });
 
-    if (errorElement) errorElement.textContent = '';
-    setAuthenticatedUser(data.user);
-    return true;
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || !result.user) {
+            if (errorElement) errorElement.textContent = result.error || 'Service number or password is incorrect.';
+            return false;
+        }
+
+        if (errorElement) errorElement.textContent = '';
+        setAuthenticatedUser(result.user);
+        return true;
+    } catch (error) {
+        console.error('Login failed:', error);
+        if (errorElement) errorElement.textContent = 'Unable to contact the authentication service.';
+        return false;
+    }
+}
+
+async function restoreDashboardSession() {
+    try {
+        const response = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
+        if (!response.ok) {
+            setAuthenticatedUser(null);
+            return false;
+        }
+
+        const result = await response.json();
+        const valid = setAuthenticatedUser(result.user);
+        if (valid) await loadCloudData();
+        return valid;
+    } catch (error) {
+        console.error('Unable to restore login session:', error);
+        setAuthenticatedUser(null);
+        return false;
+    }
 }
 
 function setupAuth() {
-    const loginForms = [
-        { formId: 'loginForm', serviceId: 'serviceNumber', passwordId: 'sharedPassword', errorId: 'loginError', redirect: true },
-        { formId: 'dashboardLoginForm', serviceId: 'dashboardServiceNumber', passwordId: 'dashboardPassword', errorId: 'dashboardLoginError', redirect: false }
-    ];
-
-    loginForms.forEach(({ formId, serviceId, passwordId, errorId, redirect }) => {
-        const form = document.getElementById(formId);
-        if (!form) return;
-
+    const form = document.getElementById('dashboardLoginForm');
+    if (form) {
         form.addEventListener('submit', async event => {
             event.preventDefault();
-            const serviceNumber = document.getElementById(serviceId)?.value || '';
-            const password = document.getElementById(passwordId)?.value || '';
-            const errorElement = document.getElementById(errorId);
+            const serviceNumber = document.getElementById('dashboardServiceNumber')?.value || '';
+            const password = document.getElementById('dashboardPassword')?.value || '';
+            const errorElement = document.getElementById('dashboardLoginError');
+
             const signedIn = await signInWithServiceNumber(serviceNumber, password, errorElement);
             if (!signedIn) return;
 
             form.reset();
-            if (redirect) {
-                window.location.href = 'Copper Dashboard.html';
-            } else {
-                await loadCloudData();
-            }
+            await loadCloudData();
         });
-    });
+    }
 
     const logoutButton = document.getElementById('logoutDashboardBtn');
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
-            await supabaseClient.auth.signOut();
+            await fetch('/api/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
             setAuthenticatedUser(null);
         });
     }
@@ -97,6 +101,7 @@ function setupAuth() {
     if (adminForm) {
         adminForm.addEventListener('submit', async event => {
             event.preventDefault();
+
             const serviceNumber = document.getElementById('newUserServiceNumber').value.trim();
             const password = document.getElementById('newUserPassword').value;
             const message = document.getElementById('addUserMessage');
@@ -106,6 +111,7 @@ function setupAuth() {
                 message.textContent = 'Enter a 6-digit service number.';
                 return;
             }
+
             if (!hasStrongPassword(password)) {
                 message.textContent = PASSWORD_POLICY_MESSAGE;
                 return;
@@ -113,58 +119,33 @@ function setupAuth() {
 
             submitButton.disabled = true;
             message.textContent = 'Creating account...';
-            const { data: sessionData } = await supabaseClient.auth.getSession();
-            const accessToken = sessionData.session?.access_token;
 
-            if (!accessToken) {
+            try {
+                const response = await fetch('/api/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ serviceNumber, password })
+                });
+
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    message.textContent = result.error || 'Could not create the account.';
+                    return;
+                }
+
+                adminForm.reset();
+                message.textContent = `Account created for service number ${serviceNumber}.`;
+            } catch (error) {
+                console.error('Create user failed:', error);
+                message.textContent = 'Unable to contact the authentication service.';
+            } finally {
                 submitButton.disabled = false;
-                message.textContent = 'Your session has expired. Please log in again.';
-                return;
             }
-
-            const response = await fetch('/api/create-user', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ serviceNumber, password })
-            });
-
-            const result = await response.json().catch(() => ({}));
-            submitButton.disabled = false;
-
-            if (!response.ok) {
-                message.textContent = result.error || 'Could not create the account.';
-                return;
-            }
-            submitButton.disabled = false;
-
-            if (error) {
-                message.textContent = error.message || 'Could not create the account.';
-                return;
-            }
-
-            adminForm.reset();
-            message.textContent = `Account created for service number ${serviceNumber}.`;
         });
     }
 
-    if (!supabaseClient) {
-        setAuthenticatedUser(null);
-        return;
-    }
-
-    supabaseClient.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_OUT') setAuthenticatedUser(null);
-        if (event === 'SIGNED_IN' && session?.user) setAuthenticatedUser(session.user);
-    });
-
-    supabaseClient.auth.getSession().then(async ({ data }) => {
-        const isAuthenticated = setAuthenticatedUser(data.session?.user);
-        if (isAuthenticated && document.querySelector('.app-shell')) await loadCloudData();
-        else if (data.session && !isAuthenticated) await supabaseClient.auth.signOut();
-    });
+    restoreDashboardSession();
 }
 
 function showToast(message, type = 'info', duration = 4000) {
