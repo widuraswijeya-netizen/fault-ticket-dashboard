@@ -205,7 +205,10 @@ async function handleSetupAdmin(request, env) {
     ).bind(base64Encode(salt), base64Encode(hash), now).run();
   } catch (error) {
     console.error("initial admin setup failed:", error);
-    return jsonResponse({ error: "Unable to initialize the administrator account." }, 500);
+    return jsonResponse({
+      error: "Unable to initialize the administrator account.",
+      diagnostic: String(error),
+    }, 500);
   }
   return jsonResponse({ ok: true, serviceNumber: "013633", role: "admin" }, 201);
 }
