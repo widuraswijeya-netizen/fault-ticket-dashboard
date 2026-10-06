@@ -182,27 +182,36 @@ async function handleAdminCreateUser(request, env) {
 
 async function handleSetupAdmin(request, env) {
   if (request.method !== "POST") return jsonResponse({ error: "Method not allowed." }, 405);
-  const countRow = await env.USERS_DB.prepare("SELECT COUNT(*) AS count FROM users").first();
-  if ((countRow?.count ?? 0) !== 0)
-    return jsonResponse({ error: "Initial setup is already complete." }, 409);
-
-  let payload;
-  try { payload = await request.json(); } catch { return jsonResponse({ error: "Invalid request body." }, 400); }
-  const password = String(payload.password ?? "");
-
-  if (!hasStrongPassword(password))
-    return jsonResponse({ error: "Password must be at least 10 characters and include uppercase, lowercase, a number, and a special character." }, 400);
-
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const hash = await derivePasswordHash(password, salt);
-  const now = new Date().toISOString();
 
   try {
+    const countRow = await env.USERS_DB.prepare("SELECT COUNT(*) AS count FROM users").first();
+    if ((countRow?.count ?? 0) !== 0)
+      return jsonResponse({ error: "Initial setup is already complete." }, 409);
+
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return jsonResponse({ error: "Invalid request body." }, 400);
+    }
+
+    const password = String(payload.password ?? "");
+    if (!hasStrongPassword(password))
+      return jsonResponse({
+        error: "Password must be at least 10 characters and include uppercase, lowercase, a number, and a special character."
+      }, 400);
+
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const hash = await derivePasswordHash(password, salt);
+    const now = new Date().toISOString();
+
     await env.USERS_DB.prepare(
       `INSERT INTO users
        (service_number, password_salt, password_hash, role, active, created_at, updated_at)
        VALUES ('013633', ?1, ?2, 'admin', 1, ?3, ?3)`
     ).bind(base64Encode(salt), base64Encode(hash), now).run();
+
+    return jsonResponse({ ok: true, serviceNumber: "013633", role: "admin" }, 201);
   } catch (error) {
     console.error("initial admin setup failed:", error);
     return jsonResponse({
@@ -210,7 +219,6 @@ async function handleSetupAdmin(request, env) {
       diagnostic: String(error),
     }, 500);
   }
-  return jsonResponse({ ok: true, serviceNumber: "013633", role: "admin" }, 201);
 }
 
 async function handleApi(request, env) {
