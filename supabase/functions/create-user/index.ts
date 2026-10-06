@@ -10,6 +10,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const AUTH_EMAIL_DOMAIN = "@intranet.slt.com.lk";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
@@ -115,7 +117,7 @@ Deno.serve(async (request: Request) => {
     });
 
     const { data, error } = await adminClient.auth.admin.createUser({
-      email: `${serviceNumber}@fault-dashboard.example.com`,
+      email: `${serviceNumber}${AUTH_EMAIL_DOMAIN}`,
       password,
       email_confirm: true,
       app_metadata: {
