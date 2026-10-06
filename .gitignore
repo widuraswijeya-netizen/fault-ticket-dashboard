@@ -12,3 +12,7 @@ desktop.ini
 *~
 .vscode/
 .idea/
+
+# Local/generated deployment configuration
+config.js
+dist/
