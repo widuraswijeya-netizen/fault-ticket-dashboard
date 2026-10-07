@@ -182,7 +182,61 @@ async function handleAdminCreateUser(request, env) {
   }
   return jsonResponse({ serviceNumber, role: "technician" }, 201);
 }
-\nasync function requireAdmin(request, env) {\n  const caller = await getSessionUser(request, env);\n  if (!caller) return { error: jsonResponse({ error: "Authentication required." }, 401) };\n  if (caller.role !== "admin") return { error: jsonResponse({ error: "Administrator access required." }, 403) };\n  return { caller };\n}\n\nasync function handleAdminListUsers(request, env) {\n  if (request.method !== "GET") return jsonResponse({ error: "Method not allowed." }, 405);\n  const auth = await requireAdmin(request, env);\n  if (auth.error) return auth.error;\n  const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();\n  const now = new Date().toISOString();\n  const result = await env.USERS_DB.prepare(`SELECT u.service_number, u.role, u.active, u.created_at, u.updated_at, CASE WHEN EXISTS (SELECT 1 FROM sessions s WHERE s.service_number = u.service_number AND s.expires_at > ?1 AND s.last_seen >= ?2) THEN 1 ELSE 0 END AS online FROM users u ORDER BY CASE WHEN u.role = "admin" THEN 0 ELSE 1 END, u.service_number`).bind(now, cutoff).all();\n  return jsonResponse({ users: result.results || [] });\n}\n\nasync function handleAdminResetPassword(request, env) {\n  if (request.method !== "POST") return jsonResponse({ error: "Method not allowed." }, 405);\n  const auth = await requireAdmin(request, env);\n  if (auth.error) return auth.error;\n  let payload;\n  try { payload = await request.json(); } catch { return jsonResponse({ error: "Invalid request body." }, 400); }\n  const serviceNumber = String(payload.serviceNumber ?? "").trim();\n  const password = String(payload.password ?? "");\n  if (!/^\\d{6}$/.test(serviceNumber)) return jsonResponse({ error: "Service number must contain exactly 6 digits." }, 400);\n  if (!hasStrongPassword(password)) return jsonResponse({ error: "Password must be at least 10 characters and include uppercase, lowercase, a number, and a special character." }, 400);\n  if (serviceNumber === auth.caller.serviceNumber) return jsonResponse({ error: "Use the administrator password reset only for technician accounts." }, 400);\n  const existing = await env.USERS_DB.prepare("SELECT service_number, role FROM users WHERE service_number = ?1").bind(serviceNumber).first();\n  if (!existing) return jsonResponse({ error: "User account not found." }, 404);\n  if (existing.role === "admin") return jsonResponse({ error: "Administrator accounts cannot be reset here." }, 403);\n  const salt = crypto.getRandomValues(new Uint8Array(16));\n  const hash = await derivePasswordHash(password, salt);\n  const now = new Date().toISOString();\n  await env.USERS_DB.prepare("UPDATE users SET password_salt = ?1, password_hash = ?2, active = 1, updated_at = ?3 WHERE service_number = ?4").bind(base64Encode(salt), base64Encode(hash), now, serviceNumber).run();\n  await env.USERS_DB.prepare("DELETE FROM sessions WHERE service_number = ?1").bind(serviceNumber).run();\n  return jsonResponse({ serviceNumber, reset: true });\n}\n\nasync function handleAdminRemoveUser(request, env, serviceNumber) {\n  if (request.method !== "DELETE") return jsonResponse({ error: "Method not allowed." }, 405);\n  const auth = await requireAdmin(request, env);\n  if (auth.error) return auth.error;\n  serviceNumber = String(serviceNumber || "").trim();\n  if (!/^\\d{6}$/.test(serviceNumber)) return jsonResponse({ error: "Service number must contain exactly 6 digits." }, 400);\n  if (serviceNumber === auth.caller.serviceNumber || serviceNumber === "013633") return jsonResponse({ error: "The administrator account cannot be removed." }, 403);\n  const existing = await env.USERS_DB.prepare("SELECT service_number, role FROM users WHERE service_number = ?1").bind(serviceNumber).first();\n  if (!existing) return jsonResponse({ error: "User account not found." }, 404);\n  if (existing.role === "admin") return jsonResponse({ error: "Administrator accounts cannot be removed here." }, 403);\n  await env.USERS_DB.prepare("DELETE FROM sessions WHERE service_number = ?1").bind(serviceNumber).run();\n  await env.USERS_DB.prepare("DELETE FROM users WHERE service_number = ?1").bind(serviceNumber).run();\n  return jsonResponse({ serviceNumber, removed: true });\n}\n
+
+async function requireAdmin(request, env) {
+  const caller = await getSessionUser(request, env);
+  if (!caller) return { error: jsonResponse({ error: "Authentication required." }, 401) };
+  if (caller.role !== "admin") return { error: jsonResponse({ error: "Administrator access required." }, 403) };
+  return { caller };
+}
+
+async function handleAdminListUsers(request, env) {
+  if (request.method !== "GET") return jsonResponse({ error: "Method not allowed." }, 405);
+  const auth = await requireAdmin(request, env);
+  if (auth.error) return auth.error;
+  const cutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+  const now = new Date().toISOString();
+  const result = await env.USERS_DB.prepare(`SELECT u.service_number, u.role, u.active, u.created_at, u.updated_at, CASE WHEN EXISTS (SELECT 1 FROM sessions s WHERE s.service_number = u.service_number AND s.expires_at > ?1 AND s.last_seen >= ?2) THEN 1 ELSE 0 END AS online FROM users u ORDER BY CASE WHEN u.role = "admin" THEN 0 ELSE 1 END, u.service_number`).bind(now, cutoff).all();
+  return jsonResponse({ users: result.results || [] });
+}
+
+async function handleAdminResetPassword(request, env) {
+  if (request.method !== "POST") return jsonResponse({ error: "Method not allowed." }, 405);
+  const auth = await requireAdmin(request, env);
+  if (auth.error) return auth.error;
+  let payload;
+  try { payload = await request.json(); } catch { return jsonResponse({ error: "Invalid request body." }, 400); }
+  const serviceNumber = String(payload.serviceNumber ?? "").trim();
+  const password = String(payload.password ?? "");
+  if (!/^\\d{6}$/.test(serviceNumber)) return jsonResponse({ error: "Service number must contain exactly 6 digits." }, 400);
+  if (!hasStrongPassword(password)) return jsonResponse({ error: "Password must be at least 10 characters and include uppercase, lowercase, a number, and a special character." }, 400);
+  if (serviceNumber === auth.caller.serviceNumber) return jsonResponse({ error: "Use the administrator password reset only for technician accounts." }, 400);
+  const existing = await env.USERS_DB.prepare("SELECT service_number, role FROM users WHERE service_number = ?1").bind(serviceNumber).first();
+  if (!existing) return jsonResponse({ error: "User account not found." }, 404);
+  if (existing.role === "admin") return jsonResponse({ error: "Administrator accounts cannot be reset here." }, 403);
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const hash = await derivePasswordHash(password, salt);
+  const now = new Date().toISOString();
+  await env.USERS_DB.prepare("UPDATE users SET password_salt = ?1, password_hash = ?2, active = 1, updated_at = ?3 WHERE service_number = ?4").bind(base64Encode(salt), base64Encode(hash), now, serviceNumber).run();
+  await env.USERS_DB.prepare("DELETE FROM sessions WHERE service_number = ?1").bind(serviceNumber).run();
+  return jsonResponse({ serviceNumber, reset: true });
+}
+
+async function handleAdminRemoveUser(request, env, serviceNumber) {
+  if (request.method !== "DELETE") return jsonResponse({ error: "Method not allowed." }, 405);
+  const auth = await requireAdmin(request, env);
+  if (auth.error) return auth.error;
+  serviceNumber = String(serviceNumber || "").trim();
+  if (!/^\\d{6}$/.test(serviceNumber)) return jsonResponse({ error: "Service number must contain exactly 6 digits." }, 400);
+  if (serviceNumber === auth.caller.serviceNumber || serviceNumber === "013633") return jsonResponse({ error: "The administrator account cannot be removed." }, 403);
+  const existing = await env.USERS_DB.prepare("SELECT service_number, role FROM users WHERE service_number = ?1").bind(serviceNumber).first();
+  if (!existing) return jsonResponse({ error: "User account not found." }, 404);
+  if (existing.role === "admin") return jsonResponse({ error: "Administrator accounts cannot be removed here." }, 403);
+  await env.USERS_DB.prepare("DELETE FROM sessions WHERE service_number = ?1").bind(serviceNumber).run();
+  await env.USERS_DB.prepare("DELETE FROM users WHERE service_number = ?1").bind(serviceNumber).run();
+  return jsonResponse({ serviceNumber, removed: true });
+}
+
 const SUPABASE_URL = "https://xdjifpqrpzdfzylhcofs.supabase.co";
 
 async function supabaseRequest(env, path, options = {}) {
@@ -323,7 +377,10 @@ async function handleApi(request, env) {
   if (url.pathname === "/api/login") return handleLogin(request, env);
   if (url.pathname === "/api/me") return handleMe(request, env);
   if (url.pathname === "/api/logout") return handleLogout(request, env);
-  if (url.pathname === "/api/admin/users" && request.method === "GET") return handleAdminListUsers(request, env);\n  if (url.pathname === "/api/admin/users" && request.method === "POST") return handleAdminCreateUser(request, env);\n  if (url.pathname === "/api/admin/users/reset-password") return handleAdminResetPassword(request, env);\n  if (url.pathname.startsWith("/api/admin/users/") && request.method === "DELETE") return handleAdminRemoveUser(request, env, decodeURIComponent(url.pathname.slice("/api/admin/users/".length)));
+  if (url.pathname === "/api/admin/users" && request.method === "GET") return handleAdminListUsers(request, env);
+  if (url.pathname === "/api/admin/users" && request.method === "POST") return handleAdminCreateUser(request, env);
+  if (url.pathname === "/api/admin/users/reset-password") return handleAdminResetPassword(request, env);
+  if (url.pathname.startsWith("/api/admin/users/") && request.method === "DELETE") return handleAdminRemoveUser(request, env, decodeURIComponent(url.pathname.slice("/api/admin/users/".length)));
   if (url.pathname === "/api/cloud/state") return handleCloudState(request, env);
   if (url.pathname === "/api/cloud/snapshots") return handleCloudSnapshots(request, env);
   return null;
