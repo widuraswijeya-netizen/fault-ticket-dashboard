@@ -308,7 +308,15 @@ async function loadDailySnapshots() {
         viewingHistoricalSnapshot = false;
         csvModifiedAt = dailySnapshots[dailySnapshots.length - 1].csv_modified_at || null;
         updateCsvModifiedDisplay(csvModifiedAt);
-        renderWorkloadChart();
+
+        // loadCloudData() calls updateDashboard() before snapshot history is
+        // loaded, so refresh the analytics metrics now that completed-ticket
+        // history is available.
+        if (Array.isArray(fullData) && fullData.length > 0) {
+            updateDashboard(fullData);
+        } else {
+            renderWorkloadChart();
+        }
     } catch (error) {
         dailySnapshots = [];
         selector.replaceChildren(new Option('History unavailable - check cloud access', ''));
