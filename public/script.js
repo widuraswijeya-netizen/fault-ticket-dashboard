@@ -507,6 +507,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const printTableBtn = document.getElementById('printTable');
     if (printTableBtn) printTableBtn.addEventListener('click', printFilteredTable);
 
+    const viewDpAlertsBtn = document.getElementById("viewDpAlertsBtn");
+    if (viewDpAlertsBtn) viewDpAlertsBtn.addEventListener("click", showDpAlerts);
+    ["dpPossibleBtn", "dpDuplicateBtn", "dpCriticalBtn"].forEach(id => {
+        const button = document.getElementById(id);
+        if (button) button.addEventListener("click", showDpAlerts);
+    });
+    const closeDpAlertsBtn = document.getElementById("closeDpAlertsBtn");
+    if (closeDpAlertsBtn) closeDpAlertsBtn.addEventListener("click", () => {
+        const modal = document.getElementById("dpAlertsModal");
+        if (modal) modal.style.display = "none";
+    });
+
     const closeModalBtn = document.getElementById('closeModalBtn');
     if (closeModalBtn) {
         closeModalBtn.onclick = function() {
@@ -830,6 +842,8 @@ function updateDashboard(data, renderResults = true) {
 
     if (!renderResults) return counts;
 
+    updateDpAlerts(data);
+
     const pendingSummary = summarizePendingAndNeedCpe(data);
     const analyticsPendingEl = document.getElementById('analytics-pending-count');
     const analyticsClearedEl = document.getElementById('analytics-cleared-count');
@@ -1110,6 +1124,136 @@ function renderWorkloadChart() {
     });
 }
 
+function parseDpLoop(value) {
+    const text = String(value || "").trim().toUpperCase().replace(/\s+/g, " ");
+    // Expected form: HAR-LMR-0555-014 / 6
+    const match = text.match(/^([A-Z0-9]+)-([A-Z0-9]+)-(\d+)-(\d+)\s*\/\s*([A-Z0-9]+)$/);
+    if (!match) return null;
+    return {
+        area: match[1],
+        cabinet: match[2],
+        cabinetNumber: match[3],
+        dpNumber: match[4],
+        loop: match[5],
+        dpKey: `${match[1]}-${match[2]}-${match[3]}-${match[4]}`,
+        fullKey: `${match[1]}-${match[2]}-${match[3]}-${match[4]} / ${match[5]}`
+    };
+}
+
+function buildDpAlertAnalysis(data) {
+    const groups = new Map();
+
+    (data || []).forEach(row => {
+        const type = String(row["SA_SERVICE_TYPE"] || "").toUpperCase();
+        const status = String(row["Status"] || "").toUpperCase();
+        if (!getIsCopperService(type) || !isTicketPending(status)) return;
+
+        const parsed = parseDpLoop(row["SA_DP_LOOP"]);
+        if (!parsed) return;
+
+        if (!groups.has(parsed.dpKey)) {
+            groups.set(parsed.dpKey, { dpKey: parsed.dpKey, loops: new Map(), rows: [], teams: new Set() });
+        }
+        const group = groups.get(parsed.dpKey);
+        group.rows.push(row);
+        group.teams.add(classifyCopper(row) || "Unassigned");
+        if (!group.loops.has(parsed.loop)) group.loops.set(parsed.loop, []);
+        group.loops.get(parsed.loop).push(row);
+    });
+
+    const alerts = [];
+    const rowAlerts = new Map();
+    let possibleCount = 0;
+    let duplicateCount = 0;
+    let criticalCount = 0;
+
+    groups.forEach(group => {
+        const uniqueLoops = Array.from(group.loops.keys()).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        const hasPossibleDpFault = uniqueLoops.length >= 2;
+        const isCritical = uniqueLoops.length >= 3;
+        const duplicateLoops = Array.from(group.loops.entries()).filter(([, rows]) => rows.length > 1);
+
+        if (hasPossibleDpFault) possibleCount += 1;
+        if (isCritical) criticalCount += 1;
+        duplicateCount += duplicateLoops.reduce((sum, [, rows]) => sum + (rows.length - 1), 0);
+
+        if (hasPossibleDpFault) {
+            alerts.push({
+                severity: isCritical ? "critical" : "possible",
+                label: isCritical ? "CHECK DP" : "POSSIBLE DP FAULT",
+                dpKey: group.dpKey,
+                loops: uniqueLoops,
+                ticketCount: group.rows.length,
+                team: Array.from(group.teams).join(", ")
+            });
+        }
+
+        duplicateLoops.forEach(([loop, rows]) => {
+            alerts.push({
+                severity: "duplicate",
+                label: "DUPLICATE REPORT",
+                dpKey: group.dpKey,
+                loops: [loop],
+                ticketCount: rows.length,
+                team: Array.from(new Set(rows.map(classifyCopper).filter(Boolean))).join(", ") || "Unassigned"
+            });
+        });
+
+        group.rows.forEach(row => {
+            const parsed = parseDpLoop(row["SA_DP_LOOP"]);
+            const sameLoopRows = parsed ? group.loops.get(parsed.loop) || [] : [];
+            const flags = [];
+            if (hasPossibleDpFault) flags.push(isCritical ? "critical" : "possible");
+            if (sameLoopRows.length > 1) flags.push("duplicate");
+            if (flags.length) rowAlerts.set(row, flags);
+        });
+    });
+
+    alerts.sort((a, b) => {
+        const rank = { critical: 0, possible: 1, duplicate: 2 };
+        return rank[a.severity] - rank[b.severity] || a.dpKey.localeCompare(b.dpKey);
+    });
+
+    return { alerts, rowAlerts, possibleCount, duplicateCount, criticalCount };
+}
+
+function updateDpAlerts(data) {
+    const analysis = buildDpAlertAnalysis(data);
+    const possible = document.getElementById("dp-possible-count");
+    const duplicate = document.getElementById("dp-duplicate-count");
+    const critical = document.getElementById("dp-critical-count");
+    if (possible) possible.textContent = analysis.possibleCount;
+    if (duplicate) duplicate.textContent = analysis.duplicateCount;
+    if (critical) critical.textContent = analysis.criticalCount;
+    return analysis;
+}
+
+function showDpAlerts() {
+    const analysis = buildDpAlertAnalysis(fullData);
+    const body = document.getElementById("dpAlertsBody");
+    const modal = document.getElementById("dpAlertsModal");
+    if (!body || !modal) return;
+
+    body.innerHTML = "";
+    if (!analysis.alerts.length) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td colspan="5" class="dp-no-alerts">No DP fault patterns or duplicate reports detected in current pending copper tickets.</td>';
+        body.appendChild(tr);
+    } else {
+        analysis.alerts.forEach(alert => {
+            const tr = document.createElement("tr");
+            tr.className = `dp-modal-row dp-${alert.severity}`;
+            [alert.label, alert.dpKey, alert.loops.join(", "), String(alert.ticketCount), alert.team].forEach(value => {
+                const td = document.createElement("td");
+                td.textContent = value;
+                tr.appendChild(td);
+            });
+            body.appendChild(tr);
+        });
+    }
+    modal.style.display = "flex";
+}
+
 function renderTable() {
     const table = document.getElementById("output");
     let thead = table.querySelector('thead');
@@ -1189,8 +1333,14 @@ function renderTable() {
         return noActive || show; 
     });
 
+    const dpAnalysis = buildDpAlertAnalysis(fullData);
+
     filtered.forEach(row => {
         const tr = document.createElement("tr");
+        const dpFlags = dpAnalysis.rowAlerts.get(row) || [];
+        if (dpFlags.includes("critical")) tr.classList.add("dp-alert-critical-row");
+        else if (dpFlags.includes("possible")) tr.classList.add("dp-alert-possible-row");
+        if (dpFlags.includes("duplicate")) tr.classList.add("dp-alert-duplicate-row");
         const team = classifyCopper(row);
         const alarmStatus = calculateAlarmStatus(row["Outage"]); 
         
@@ -1224,61 +1374,81 @@ function renderTable() {
 }
 
 function printFilteredTable() {
-    const table = document.getElementById('output');
-    const tableClone = table.cloneNode(true); 
-
-    const columnsToPrint = ["Priority", "Circuit Display Name", "Customer Name", "SA_ADDRESS", "FA_CONTACT_NUMBER", "ID", "SA_DP_LOOP", "Description"];
-    const headerRow = tableClone.querySelector('thead tr');
-    const bodyRows = tableClone.querySelectorAll('tbody tr');
-
-    const originalHeaders = Array.from(headerRow.querySelectorAll('th')).map(th => th.textContent);
-    const keepIndexes = originalHeaders
-        .map((headerText, index) => columnsToPrint.includes(headerText) ? index : -1)
-        .filter(index => index >= 0);
-
-    const headerCells = Array.from(headerRow.querySelectorAll('th'));
-    for (let i = headerCells.length - 1; i >= 0; i--) {
-        if (!keepIndexes.includes(i)) {
-            headerCells[i].remove();
-        }
+    const table = document.getElementById("output");
+    if (!table || !table.querySelector("thead tr")) {
+        showToast("There is no ticket table to print.", "warning");
+        return;
     }
 
-    bodyRows.forEach(row => {
-        const cells = Array.from(row.querySelectorAll('td'));
-        for (let i = cells.length - 1; i >= 0; i--) {
-            if (!keepIndexes.includes(i)) {
-                cells[i].remove();
-            }
-        }
+    const tableClone = table.cloneNode(true);
+    const isGlDuPrint = activeCategory === "GLDU";
+    const columnsToPrint = isGlDuPrint
+        ? ["Team Name", "Priority", "Circuit Display Name", "Customer Name", "SA_ADDRESS", "FA_CONTACT_NUMBER", "ID", "SA_DP_LOOP", "Description"]
+        : ["Priority", "Circuit Display Name", "Customer Name", "SA_ADDRESS", "FA_CONTACT_NUMBER", "ID", "SA_DP_LOOP", "Description"];
+
+    const headerRow = tableClone.querySelector("thead tr");
+    const originalHeaders = Array.from(headerRow.querySelectorAll("th")).map(th => th.textContent.trim());
+    const keepIndexes = originalHeaders.map((header, index) => columnsToPrint.includes(header) ? index : -1).filter(index => index >= 0);
+
+    Array.from(headerRow.querySelectorAll("th")).forEach((cell, index) => {
+        if (!keepIndexes.includes(index)) cell.remove();
+    });
+    Array.from(tableClone.querySelectorAll("tbody tr")).forEach(row => {
+        Array.from(row.querySelectorAll("td")).forEach((cell, index) => {
+            if (!keepIndexes.includes(index)) cell.remove();
+        });
     });
 
-    Array.from(tableClone.querySelectorAll('tbody tr')).forEach(row => {
-        if (row.querySelectorAll('td').length === 0) {
-            row.remove();
-        }
-    });
+    if (isGlDuPrint) {
+        const teamIndex = columnsToPrint.indexOf("Team Name");
+        const dpIndex = columnsToPrint.indexOf("SA_DP_LOOP");
+        const idIndex = columnsToPrint.indexOf("ID");
+        const tbody = tableClone.querySelector("tbody");
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+        rows.sort((a, b) => {
+            const ac = a.querySelectorAll("td"), bc = b.querySelectorAll("td");
+            const teamCompare = (ac[teamIndex]?.textContent || "").localeCompare(bc[teamIndex]?.textContent || "", undefined, { numeric: true });
+            if (teamCompare) return teamCompare;
+            const dpCompare = (ac[dpIndex]?.textContent || "").localeCompare(bc[dpIndex]?.textContent || "", undefined, { numeric: true });
+            if (dpCompare) return dpCompare;
+            return (ac[idIndex]?.textContent || "").localeCompare(bc[idIndex]?.textContent || "", undefined, { numeric: true });
+        });
+        rows.forEach(row => tbody.appendChild(row));
+    }
 
-    const printWindow = window.open('', '_blank');
-    printWindow.document.write('<html><head><title>Filtered Table</title>');
-    printWindow.document.write('<style>');
-    printWindow.document.write('@page { size: A4 landscape; margin: 12mm; }');
-    printWindow.document.write('body { margin: 0; padding: 12px; font-family: Arial, sans-serif; font-size: 10pt; }');
-    printWindow.document.write('table { border-collapse: collapse; width: 100%; table-layout: fixed; }');
-    printWindow.document.write('th, td { border: 1px solid #000; padding: 8px; text-align: left; word-wrap: break-word; }');
-    printWindow.document.write('th { font-weight: 700; }');
-    printWindow.document.write('td { font-weight: 400; }');
-    printWindow.document.write('tbody tr { page-break-inside: avoid; }');
-    printWindow.document.write('</style>');
-    printWindow.document.write('</head><body>');
-    printWindow.document.write('<table>');
-    printWindow.document.write(tableClone.outerHTML);
-    printWindow.document.write('</table>');
-    printWindow.document.write('</body></html>');
-    printWindow.document.close(); 
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+        showToast("Print window was blocked. Allow pop-ups for this dashboard and try again.", "error");
+        return;
+    }
 
-    printWindow.focus(); 
-    printWindow.print(); 
-    printWindow.close(); 
+    const title = isGlDuPrint ? "GL/DU Copper Ticket Report" : "Filtered Ticket Report";
+    const generated = new Date().toLocaleString();
+    printWindow.document.open();
+    printWindow.document.write(`<!doctype html><html><head><title>${title}</title><style>
+        @page{size:A4 landscape;margin:9mm}
+        *{box-sizing:border-box}
+        body{margin:0;font-family:Arial,sans-serif;color:#111827;font-size:8.5pt}
+        h1{font-size:16pt;margin:0 0 3px}
+        .meta{font-size:8pt;color:#4b5563;margin:0 0 10px}
+        table{border-collapse:collapse;width:100%;table-layout:auto}
+        thead{display:table-header-group}
+        tr{page-break-inside:avoid}
+        th,td{border:1px solid #64748b;padding:5px 6px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+        th{background:#e2e8f0;font-weight:700}
+        tbody tr:nth-child(even){background:#f8fafc}
+    </style></head><body><h1>${title}</h1><p class="meta">Generated: ${generated}${isGlDuPrint ? " • Sorted by Team Name → SA_DP_LOOP → ID" : ""}</p>${tableClone.outerHTML}</body></html>`);
+    printWindow.document.close();
+
+    const triggerPrint = () => {
+        printWindow.focus();
+        printWindow.print();
+    };
+    if (printWindow.document.readyState === "complete") {
+        setTimeout(triggerPrint, 150);
+    } else {
+        printWindow.addEventListener("load", () => setTimeout(triggerPrint, 150), { once: true });
+    }
 }
 
 function renderSinglePieChart(ftth1, ftth2, gldu, unwhar, umnf, im, lte, ug) {
