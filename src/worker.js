@@ -208,7 +208,7 @@ async function handleAdminResetPassword(request, env) {
   try { payload = await request.json(); } catch { return jsonResponse({ error: "Invalid request body." }, 400); }
   const serviceNumber = String(payload.serviceNumber ?? "").trim();
   const password = String(payload.password ?? "");
-  if (!/^\\d{6}$/.test(serviceNumber)) return jsonResponse({ error: "Service number must contain exactly 6 digits." }, 400);
+  if (!/^\d{6}$/.test(serviceNumber)) return jsonResponse({ error: "Service number must contain exactly 6 digits." }, 400);
   if (!hasStrongPassword(password)) return jsonResponse({ error: "Password must be at least 10 characters and include uppercase, lowercase, a number, and a special character." }, 400);
   if (serviceNumber === auth.caller.serviceNumber) return jsonResponse({ error: "Use the administrator password reset only for technician accounts." }, 400);
   const existing = await env.USERS_DB.prepare("SELECT service_number, role FROM users WHERE service_number = ?1").bind(serviceNumber).first();
@@ -227,7 +227,7 @@ async function handleAdminRemoveUser(request, env, serviceNumber) {
   const auth = await requireAdmin(request, env);
   if (auth.error) return auth.error;
   serviceNumber = String(serviceNumber || "").trim();
-  if (!/^\\d{6}$/.test(serviceNumber)) return jsonResponse({ error: "Service number must contain exactly 6 digits." }, 400);
+  if (!/^\d{6}$/.test(serviceNumber)) return jsonResponse({ error: "Service number must contain exactly 6 digits." }, 400);
   if (serviceNumber === auth.caller.serviceNumber || serviceNumber === "013633") return jsonResponse({ error: "The administrator account cannot be removed." }, 403);
   const existing = await env.USERS_DB.prepare("SELECT service_number, role FROM users WHERE service_number = ?1").bind(serviceNumber).first();
   if (!existing) return jsonResponse({ error: "User account not found." }, 404);
