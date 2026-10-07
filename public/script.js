@@ -832,10 +832,21 @@ function updateDashboard(data, renderResults = true) {
 
     const pendingSummary = summarizePendingAndNeedCpe(data);
     const analyticsPendingEl = document.getElementById('analytics-pending-count');
+    const analyticsClearedEl = document.getElementById('analytics-cleared-count');
     const analyticsCompletedEl = document.getElementById('analytics-completed-count');
     const analyticsNeedCpeEl = document.getElementById('analytics-need-cpe-count');
     const completedToday = getCumulativeCompletedToday();
+
+    // Cleared = tickets currently marked CLOSED / RESOLVED / CLEARED
+    // in the current CSV snapshot. Completed = tickets inferred completed
+    // by disappearing from successive CSV snapshots.
+    const currentCleared = Object.values(counts).reduce(
+        (total, category) => total + (category.Clear || 0),
+        0
+    );
+
     if (analyticsPendingEl) analyticsPendingEl.textContent = pendingSummary.pending;
+    if (analyticsClearedEl) analyticsClearedEl.textContent = currentCleared;
     if (analyticsCompletedEl) analyticsCompletedEl.textContent = completedToday.total;
     if (analyticsNeedCpeEl) analyticsNeedCpeEl.textContent = pendingSummary.needCpe;
 
