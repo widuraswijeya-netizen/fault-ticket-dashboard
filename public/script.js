@@ -824,8 +824,11 @@ function updateDashboard(data, renderResults = true) {
 
     const pendingSummary = summarizePendingAndNeedCpe(data);
     const analyticsPendingEl = document.getElementById('analytics-pending-count');
+    const analyticsClearedEl = document.getElementById('analytics-cleared-count');
     const analyticsNeedCpeEl = document.getElementById('analytics-need-cpe-count');
+    const completedToday = getCumulativeCompletedToday();
     if (analyticsPendingEl) analyticsPendingEl.textContent = pendingSummary.pending;
+    if (analyticsClearedEl) analyticsClearedEl.textContent = completedToday.total;
     if (analyticsNeedCpeEl) analyticsNeedCpeEl.textContent = pendingSummary.needCpe;
 
     const updateCard = (cardPrefix, dataCounts) => {
@@ -875,24 +878,27 @@ function updateDashboard(data, renderResults = true) {
     let totalUG = counts.UG.Open + counts.UG.Ack;
 
     google.charts.setOnLoadCallback(() => {
+        const completedToday = getCumulativeCompletedToday();
         renderSinglePieChart(
-            totalGLDUFTTH, totalUNWHARFTTH, totalGLDU, 
-            totalUNWHAR, totalUMNF, totalIM, total4G, totalUG
+            pendingSummary.pending,
+            completedToday.total,
+            pendingSummary.needCpe
         );
-        renderPendingNeedCpePieChart(pendingSummary.otherPending, pendingSummary.needCpe);
+        renderPendingNeedCpePieChart(pendingSummary.pending, completedToday.total, pendingSummary.needCpe);
     });
 
     if (renderResults) renderWorkloadChart();
     return counts;
 }
 
-function renderPendingNeedCpePieChart(otherPending, needCpe) {
+function renderPendingNeedCpePieChart(pending, cleared, needCpe) {
     const container = document.getElementById('pendingNeedCpePieChart');
     if (!container) return;
 
     const data = google.visualization.arrayToDataTable([
         ['Group', 'Count'],
-        ['Pending (other)', otherPending],
+        ['Pending', pending],
+        ['Cleared', cleared],
         ['Need CPE', needCpe]
     ]);
 
@@ -1227,26 +1233,21 @@ function printFilteredTable() {
     printWindow.close(); 
 }
 
-function renderSinglePieChart(ftth1, ftth2, gldu, unwhar, umnf, im, lte, ug) {
+function renderSinglePieChart(pending, cleared, needCpe) {
     const container = document.getElementById('totalTicketsPieChart');
     if (!container) return;
 
     const data = google.visualization.arrayToDataTable([
-        ['Category', 'Open & Ack Tickets'],
-        ['GL/DU FTTH', ftth1],
-        ['UNW/HAR/IM FTTH', ftth2],
-        ['GL/DU Copper', gldu],
-        ['UNW/HAR Copper', unwhar],
-        ['UM/NF Copper', umnf],
-        ['IM Copper', im],
-        ['4G / LTE', lte],
-        ['UG Fault', ug]
+        ['Category', 'Ticket Count'],
+        ['Pending', pending],
+        ['Cleared', cleared],
+        ['Need CPE', needCpe]
     ]);
 
     const options = {
         backgroundColor: 'transparent',
         pieHole: 0.4,
-        colors: ['#8b5cf6', '#6366f1', '#38bdf8', '#fbbf24', '#f97316', '#ef5350', '#10b981', '#ec4899'],
+        colors: ['#475569', '#10b981', '#f59e0b'],
         legend: {
             position: 'right',
             textStyle: { color: '#e2e8f0', fontSize: 11 }
@@ -1256,6 +1257,33 @@ function renderSinglePieChart(ftth1, ftth2, gldu, unwhar, umnf, im, lte, ug) {
 
     const chart = new google.visualization.PieChart(container);
     chart.draw(data, options);
+}
+
+function getCumulativeCompletedToday() {
+    const completedIds = new Set();
+    const completedByCategory = {
+        GLDU: 0, GLDUFTTH: 0, UNWHAR: 0, UNWHARIMFTTH: 0,
+        UMNF: 0, IM: 0, "4G": 0, UG: 0
+    };
+
+    for (let i = 1; i < dailySnapshots.length; i++) {
+        const previousTickets = dailySnapshots[i - 1].tickets || [];
+        const currentTickets = dailySnapshots[i].tickets || [];
+        const currentIds = new Set(currentTickets.map(normalizeTicketId).filter(Boolean));
+
+        previousTickets.forEach(row => {
+            const id = normalizeTicketId(row);
+            if (!id || currentIds.has(id) || completedIds.has(id)) return;
+
+            completedIds.add(id);
+            const completed = getCompletedCounts([row], currentTickets);
+            for (const key of Object.keys(completedByCategory)) {
+                completedByCategory[key] += completed[key];
+            }
+        });
+    }
+
+    return { total: completedIds.size, byCategory: completedByCategory };
 }
 
 function openTicketModal(rowObj, teamName, alarmStatus) {
