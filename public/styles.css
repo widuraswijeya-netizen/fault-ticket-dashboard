@@ -879,3 +879,16 @@ tr.critical-alarm td {
     from { opacity: 1; transform: translateX(0); }
     to   { opacity: 0; transform: translateX(40px); }
 }
+
+.admin-panel-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.admin-users-table-wrap{margin-top:22px;overflow-x:auto;border:1px solid rgba(99,102,241,.18);border-radius:10px}
+.admin-users-table{width:100%;min-width:720px;border-collapse:collapse}
+.admin-users-table th,.admin-users-table td{padding:11px 12px;border-bottom:1px solid rgba(99,102,241,.12);text-align:left}
+.admin-users-table th{background:rgba(15,23,42,.8)}
+.user-status{display:inline-flex;align-items:center;gap:7px;font-weight:700}
+.user-status::before{content:"";width:9px;height:9px;border-radius:50%;display:inline-block}
+.user-status.online{color:#34d399}.user-status.online::before{background:#34d399;box-shadow:0 0 10px rgba(52,211,153,.7)}
+.user-status.offline{color:#94a3b8}.user-status.offline::before{background:#64748b}
+.admin-action-btn{border:0;border-radius:6px;padding:7px 10px;margin-right:7px;cursor:pointer;color:white;font-weight:600}
+.admin-action-btn.reset{background:#2563eb}.admin-action-btn.remove{background:#dc2626}.admin-action-btn:hover{filter:brightness(1.12)}
+@media(max-width:700px){.admin-panel-heading{align-items:flex-start;flex-direction:column}}
