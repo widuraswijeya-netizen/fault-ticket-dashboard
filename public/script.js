@@ -1328,8 +1328,15 @@ function getCumulativeCompletedToday() {
             const id = normalizeTicketId(row);
             if (!id || currentIds.has(id) || completedIds.has(id)) return;
 
-            completedIds.add(id);
+            // Only count the ID as Completed when the snapshot comparison
+            // classifies it as a true completion. A ticket that disappeared
+            // after already being CLOSED / RESOLVED / CLEARED must not be
+            // added to Completed, otherwise Cleared + Completed gets combined.
             const completed = getCompletedCounts([row], currentTickets);
+            const completedThisTicket = Object.values(completed).some(value => value > 0);
+            if (!completedThisTicket) return;
+
+            completedIds.add(id);
             for (const key of Object.keys(completedByCategory)) {
                 completedByCategory[key] += completed[key];
             }
