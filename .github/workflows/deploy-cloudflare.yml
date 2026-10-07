@@ -31,8 +31,8 @@ jobs:
         shell: bash
         run: |
           set -e
-          schema="$(wrangler d1 execute fault-dashboard-users --remote --command='PRAGMA table_info(sessions)' --json)"
-          if echo "$schema" | grep -q '"name":"last_seen"'; then
+          schema="$(wrangler d1 execute fault-dashboard-users --remote --command="SELECT name FROM pragma_table_info('sessions') WHERE name='last_seen'" --json)"
+          if echo "$schema" | grep -q 'last_seen'; then
             echo "sessions.last_seen already exists."
           else
             echo "Adding sessions.last_seen..."
