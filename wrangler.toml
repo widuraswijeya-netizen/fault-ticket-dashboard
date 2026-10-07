@@ -11,3 +11,6 @@ run_worker_first = ["/api/*"]
 binding = "USERS_DB"
 database_name = "fault-dashboard-users"
 database_id = "56ca6ce1-a4f5-4a8a-94ec-8eb75b191ded"
+
+[secrets]
+required = ["SUPABASE_SECRET_KEY"]
