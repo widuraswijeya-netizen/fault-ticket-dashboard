@@ -226,6 +226,7 @@ function showToast(message, type = 'info', duration = 4000) {
 let dailySnapshots = [];
 let viewingHistoricalSnapshot = false;
 let csvModifiedAt = null;
+let loadedCsvFileSignature = null;
 
 function getLocalDayBounds(date = new Date()) {
     const start = new Date(date);
@@ -265,7 +266,7 @@ function updateCsvModifiedDisplay(value) {
 }
 
 function formatSnapshotTime(snapshot) {
-    return new Date(snapshot.captured_at).toLocaleTimeString([], {
+    return new Date(snapshot.csv_modified_at || snapshot.captured_at).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit'
@@ -285,7 +286,11 @@ async function loadDailySnapshots() {
         const result = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(result.error || 'Unable to load cloud history.');
 
-        dailySnapshots = Array.isArray(result) ? result : [];
+        dailySnapshots = (Array.isArray(result) ? result : []).sort((a, b) => {
+            const aTime = Date.parse(a.csv_modified_at || a.captured_at || '') || 0;
+            const bTime = Date.parse(b.csv_modified_at || b.captured_at || '') || 0;
+            return aTime - bTime;
+        });
         selector.replaceChildren();
 
         if (dailySnapshots.length === 0) {
@@ -333,6 +338,33 @@ function loadSelectedSnapshot(snapshotId) {
 }
 
 async function updateCloudData() {
+    const csvFileInput = document.getElementById('csvFile');
+    const selectedFile = csvFileInput?.files?.[0] || null;
+
+    if (!selectedFile || !loadedCsvFileSignature) {
+        return showToast('Select a CSV file first. Cloud upload is disabled until a CSV is loaded.', 'warning', 7000);
+    }
+
+    const currentFileSignature = [selectedFile.name, selectedFile.size, selectedFile.lastModified].join('|');
+    if (currentFileSignature !== loadedCsvFileSignature) {
+        return showToast('The selected CSV has changed. Please load the CSV again before uploading to Cloud.', 'warning', 7000);
+    }
+
+    const fileModifiedAt = new Date(selectedFile.lastModified);
+    const nowLocal = new Date();
+    const sameLocalDay =
+        fileModifiedAt.getFullYear() === nowLocal.getFullYear() &&
+        fileModifiedAt.getMonth() === nowLocal.getMonth() &&
+        fileModifiedAt.getDate() === nowLocal.getDate();
+
+    if (!Number.isFinite(fileModifiedAt.getTime())) {
+        return showToast('The CSV modified time could not be read. Please select the CSV again.', 'error', 7000);
+    }
+
+    if (!sameLocalDay) {
+        return showToast('Only a CSV modified today can be uploaded to Cloud. Please use today\'s CSV file.', 'warning', 8000);
+    }
+
     if (!fullData || fullData.length === 0) {
         return showToast('No ticket data loaded to upload!', 'warning');
     }
@@ -364,7 +396,7 @@ async function updateCloudData() {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ tickets: optimizedTickets, updated_at: capturedAt })
+            body: JSON.stringify({ tickets: optimizedTickets, updated_at: capturedAt, csv_modified_at: csvModifiedAt })
         });
         const stateResult = await stateResponse.json().catch(() => ({}));
         if (!stateResponse.ok) throw new Error(stateResult.error || 'Cloud state update failed.');
@@ -375,7 +407,8 @@ async function updateCloudData() {
             credentials: 'include',
             body: JSON.stringify({
                 captured_at: capturedAt,
-                csv_modified_at: csvModifiedAt || null,
+                csv_modified_at: csvModifiedAt,
+                client_local_date: nowLocal.toLocaleDateString('en-CA'),
                 tickets: optimizedTickets
             })
         });
@@ -495,9 +528,23 @@ updateCurrentTime();
 
 function handleFile() {
     const file = document.getElementById("csvFile").files[0];
-    if (!file) return;
+    loadedCsvFileSignature = null;
+    if (!file) {
+        csvModifiedAt = null;
+        updateCsvModifiedDisplay(null);
+        return;
+    }
 
-    csvModifiedAt = new Date(file.lastModified).toISOString();
+    const fileModifiedDate = new Date(file.lastModified);
+    if (!Number.isFinite(fileModifiedDate.getTime())) {
+        csvModifiedAt = null;
+        updateCsvModifiedDisplay(null);
+        showToast('Unable to read the CSV modified time.', 'error', 7000);
+        return;
+    }
+
+    loadedCsvFileSignature = [file.name, file.size, file.lastModified].join('|');
+    csvModifiedAt = fileModifiedDate.toISOString();
     updateCsvModifiedDisplay(csvModifiedAt);
 
     Papa.parse(file, {
