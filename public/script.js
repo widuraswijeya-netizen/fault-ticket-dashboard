@@ -1016,6 +1016,8 @@ function renderWorkloadChart() {
     }
 
     google.charts.setOnLoadCallback(() => {
+        let cumulativeCompleted = 0;
+
         const rows = dailySnapshots.map((snapshot, index) => {
             const counts = updateDashboard(snapshot.tickets, false);
             const selectedCounts = selectedCategory
@@ -1026,24 +1028,27 @@ function renderWorkloadChart() {
                     Clear: total.Clear + category.Clear
                 }), { Open: 0, Ack: 0, Clear: 0 });
 
-            const completed = index === 0
-                ? 0
-                : (() => {
-                    const completedByCategory = getCompletedCounts(
-                        dailySnapshots[index - 1].tickets,
-                        snapshot.tickets
-                    );
-                    return selectedCategory
-                        ? completedByCategory[selectedCategory]
-                        : Object.values(completedByCategory).reduce((sum, value) => sum + value, 0);
-                })();
+            // Each new CSV upload contributes the tickets that disappeared
+            // since the previous upload. Keep adding those completed tickets
+            // so the Completed trend is cumulative and never moves downward.
+            if (index > 0) {
+                const completedByCategory = getCompletedCounts(
+                    dailySnapshots[index - 1].tickets,
+                    snapshot.tickets
+                );
+                const completedThisUpload = selectedCategory
+                    ? completedByCategory[selectedCategory]
+                    : Object.values(completedByCategory).reduce((sum, value) => sum + value, 0);
+
+                cumulativeCompleted += completedThisUpload;
+            }
 
             return [
                 formatSnapshotTime(snapshot),
                 selectedCounts.Open,
                 selectedCounts.Ack,
                 selectedCounts.Clear,
-                completed
+                cumulativeCompleted
             ];
         });
 
