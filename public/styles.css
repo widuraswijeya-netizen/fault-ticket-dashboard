@@ -1091,3 +1091,56 @@ tr.critical-alarm td {
         width: min(440px, calc(100% - 24px));
     }
 }
+
+
+/* DP network fault intelligence */
+.dp-alert-card {
+    min-height: 254px;
+    border-color: rgba(245, 158, 11, .34);
+    background: linear-gradient(145deg, rgba(30, 41, 59, .96), rgba(15, 23, 42, .98));
+}
+.dp-alert-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 8px 0 10px;
+}
+.dp-alert-metric {
+    appearance: none;
+    border: 1px solid rgba(148, 163, 184, .18);
+    border-radius: 10px;
+    padding: 9px 8px;
+    background: rgba(30, 41, 59, .72);
+    color: #cbd5e1;
+    cursor: pointer;
+    text-align: left;
+    transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+.dp-alert-metric:hover { transform: translateY(-1px); border-color: rgba(56, 189, 248, .55); }
+.dp-alert-metric span { display: block; font-size: 10px; line-height: 1.2; min-height: 24px; }
+.dp-alert-metric strong { display: block; margin-top: 4px; font-size: 22px; line-height: 1; }
+.dp-alert-metric.possible strong { color: #f59e0b; }
+.dp-alert-metric.duplicate strong { color: #60a5fa; }
+.dp-alert-metric.critical strong { color: #f87171; }
+.dp-alert-help { margin: 0 0 10px; color: #94a3b8; font-size: 11px; line-height: 1.35; }
+.dp-alert-view-btn { width: 100%; padding: 8px 10px; font-size: 12px; background: linear-gradient(135deg, #d97706, #f59e0b); }
+.dp-alert-modal-content { max-width: 920px; }
+.dp-modal-subtitle { color: #94a3b8; margin: 4px 0 0; font-size: 12px; }
+.dp-alert-table-wrap { overflow-x: auto; }
+.dp-alert-table { width: 100%; border-collapse: collapse; min-width: 650px; }
+.dp-alert-table th, .dp-alert-table td { padding: 10px 11px; border-bottom: 1px solid rgba(148, 163, 184, .16); text-align: left; }
+.dp-alert-table th { color: #cbd5e1; background: rgba(15, 23, 42, .8); font-size: 11px; text-transform: uppercase; }
+.dp-alert-table td { color: #e2e8f0; font-size: 12px; }
+.dp-modal-row.dp-critical td:first-child { color: #f87171; font-weight: 800; }
+.dp-modal-row.dp-possible td:first-child { color: #fbbf24; font-weight: 800; }
+.dp-modal-row.dp-duplicate td:first-child { color: #60a5fa; font-weight: 800; }
+.dp-no-alerts { text-align: center !important; padding: 24px !important; color: #94a3b8 !important; }
+#output tbody tr.dp-alert-possible-row td { background-image: linear-gradient(rgba(245,158,11,.075), rgba(245,158,11,.075)); }
+#output tbody tr.dp-alert-critical-row td { background-image: linear-gradient(rgba(239,68,68,.10), rgba(239,68,68,.10)); }
+#output tbody tr.dp-alert-duplicate-row td:first-child { box-shadow: inset 4px 0 0 #60a5fa; }
+#output tbody tr.dp-alert-critical-row td:first-child { box-shadow: inset 4px 0 0 #ef4444; }
+#output tbody tr.dp-alert-possible-row:not(.dp-alert-critical-row) td:first-child { box-shadow: inset 4px 0 0 #f59e0b; }
+@media (max-width: 720px) {
+    .dp-alert-summary { grid-template-columns: 1fr; }
+    .dp-alert-card { min-height: auto; }
+}
