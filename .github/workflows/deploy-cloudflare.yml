@@ -27,8 +27,17 @@ jobs:
       - name: Install Wrangler
         run: npm install --global wrangler@latest
 
-      - name: Apply D1 migrations
-        run: wrangler d1 migrations apply fault-dashboard-users --remote --yes
+      - name: Ensure D1 session heartbeat column
+        shell: bash
+        run: |
+          set -e
+          schema="$(wrangler d1 execute fault-dashboard-users --remote --command='PRAGMA table_info(sessions)' --json)"
+          if echo "$schema" | grep -q '"name":"last_seen"'; then
+            echo "sessions.last_seen already exists."
+          else
+            echo "Adding sessions.last_seen..."
+            wrangler d1 execute fault-dashboard-users --remote --command='ALTER TABLE sessions ADD COLUMN last_seen TEXT;' --yes
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 257be0d9a5debb495211a815ed3de713
