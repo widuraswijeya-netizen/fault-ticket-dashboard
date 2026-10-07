@@ -837,13 +837,22 @@ function updateDashboard(data, renderResults = true) {
     const analyticsNeedCpeEl = document.getElementById('analytics-need-cpe-count');
     const completedToday = getCumulativeCompletedToday();
 
-    // Cleared = tickets currently marked CLOSED / RESOLVED / CLEARED
-    // in the current CSV snapshot. Completed = tickets inferred completed
-    // by disappearing from successive CSV snapshots.
-    const currentCleared = Object.values(counts).reduce(
-        (total, category) => total + (category.Clear || 0),
-        0
-    );
+    // Cleared in the Total Tickets Distribution card is limited to
+    // the SA_LEA areas GL, DU, NUW, IM, UM and NF, which are the
+    // responsibility areas for this dashboard. The main table can still
+    // display tickets from other SA_LEA values.
+    // Completed remains a separate historical metric based on snapshot
+    // comparison.
+    const responsibleLeas = new Set(["GL", "DU", "NUW", "IM", "UM", "NF"]);
+    const currentCleared = data.reduce((total, row) => {
+        const lea = String(row["SA_LEA"] || "").trim().toUpperCase();
+        const status = String(row["Status"] || "").trim().toUpperCase();
+        const isCleared = status.includes("CLOSED") ||
+            status.includes("RESOLVED") ||
+            status.includes("CLEARED");
+
+        return total + (responsibleLeas.has(lea) && isCleared ? 1 : 0);
+    }, 0);
 
     if (analyticsPendingEl) analyticsPendingEl.textContent = pendingSummary.pending;
     if (analyticsClearedEl) analyticsClearedEl.textContent = currentCleared;
