@@ -852,7 +852,15 @@ function updateDashboard(data, renderResults = true) {
 
     updateDpAlerts(data);
 
+    // Pending in the overview must reconcile exactly with the visible
+    // workload cards. Those cards are the authoritative categorized
+    // workload, so sum Open + Ack across all eight displayed categories.
+    const visibleOpen = Object.values(counts).reduce((sum, item) => sum + (item.Open || 0), 0);
+    const visibleAck = Object.values(counts).reduce((sum, item) => sum + (item.Ack || 0), 0);
     const pendingSummary = summarizePendingAndNeedCpe(data);
+    pendingSummary.pending = visibleOpen + visibleAck;
+    pendingSummary.otherPending = Math.max(0, pendingSummary.pending - pendingSummary.needCpe);
+
     const analyticsPendingEl = document.getElementById('analytics-pending-count');
     const analyticsClearedEl = document.getElementById('analytics-cleared-count');
     const analyticsCompletedEl = document.getElementById('analytics-completed-count');
