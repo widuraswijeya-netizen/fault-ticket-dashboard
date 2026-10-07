@@ -88,12 +88,15 @@
         </section>
 
         <section id="adminUserPanel" class="admin-user-panel" hidden>
-            <div>
-                <h2>Add Technician Account</h2>
-                <p>Create a sign-in for a 6-digit service number.</p>
+            <div class="admin-panel-heading">
+                <div>
+                    <h2>Administrator — User Management</h2>
+                    <p>Add technicians, reset passwords, remove accounts, and see who is currently online.</p>
+                </div>
+                <button id="refreshUsersBtn" type="button" class="modern-btn secondary-btn">Refresh Users</button>
             </div>
             <form id="addUserForm" class="admin-user-form">
-                <label for="newUserServiceNumber">Service number
+                <label for="newUserServiceNumber">New service number
                     <input id="newUserServiceNumber" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="off" required>
                 </label>
                 <label for="newUserPassword">Temporary password
@@ -103,6 +106,12 @@
             </form>
             <p class="admin-user-policy">Password must have at least 10 characters, including uppercase, lowercase, a number, and a special character.</p>
             <p id="addUserMessage" class="admin-user-message" aria-live="polite"></p>
+            <div class="admin-users-table-wrap">
+                <table class="admin-users-table">
+                    <thead><tr><th>Service Number</th><th>Role</th><th>Status</th><th>Last Seen</th><th>Actions</th></tr></thead>
+                    <tbody id="adminUsersBody"><tr><td colspan="5">Loading users...</td></tr></tbody>
+                </table>
+            </div>
         </section>
 
         <section class="dashboard-grid">
