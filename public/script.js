@@ -882,7 +882,7 @@ function updateDashboard(data, renderResults = true) {
         renderPendingNeedCpePieChart(pendingSummary.otherPending, pendingSummary.needCpe);
     });
 
-    renderWorkloadChart();
+    if (renderResults) renderWorkloadChart();
     return counts;
 }
 
@@ -911,6 +911,67 @@ function renderPendingNeedCpePieChart(otherPending, needCpe) {
     chart.draw(data, options);
 }
 
+function normalizeTicketId(row) {
+    return String(row?.["ID"] ?? "").trim().toUpperCase();
+}
+
+function getCompletedCounts(previousTickets, currentTickets) {
+    const currentIds = new Set(
+        (currentTickets || [])
+            .map(normalizeTicketId)
+            .filter(Boolean)
+    );
+
+    const completed = {
+        GLDU: 0,
+        GLDUFTTH: 0,
+        UNWHAR: 0,
+        UNWHARIMFTTH: 0,
+        UMNF: 0,
+        IM: 0,
+        "4G": 0,
+        UG: 0
+    };
+
+    (previousTickets || []).forEach(row => {
+        const id = normalizeTicketId(row);
+        if (!id || currentIds.has(id)) return;
+
+        const counts = {};
+        const type = (row["SA_SERVICE_TYPE"] || "").trim().toUpperCase();
+        const lea = (row["SA_LEA"] || "").trim().toUpperCase();
+        const isUG = (row["Assigned WG"] || "").toUpperCase().includes("CDM");
+        const circuit = (row["Circuit Display Name"] || "").trim().toUpperCase();
+        const assignedWG = (row["Assigned WG"] || "").trim().toUpperCase();
+        const dpLoop = (row["SA_DP_LOOP"] || "").trim().toUpperCase();
+        const isCopperService = getIsCopperService(type);
+        const is4G = !isCopperService && (assignedWG.includes("LTE") || circuit.includes("0913") || circuit.includes("94913"));
+        const isFTTH = type.includes("FTTH");
+        const isUnwHarDpLoopStart = dpLoop.startsWith("UNW") || dpLoop.startsWith("HAR");
+
+        if (isFTTH) {
+            if (["GL", "DU"].includes(lea)) completed.GLDUFTTH++;
+            else if (["UNW", "HAR", "IM"].includes(lea)) completed.UNWHARIMFTTH++;
+        } else if (isUnwHarDpLoopStart && !isUG && isCopperService) {
+            completed.UNWHAR++;
+        } else if (["GL", "DU"].includes(lea) && !isUG && !is4G && isCopperService) {
+            completed.GLDU++;
+        } else if (["UM", "NF"].includes(lea) && !isUG && !is4G && !isFTTH && isCopperService) {
+            completed.UMNF++;
+        } else if (lea === "IM" && !isUG && !is4G && !isFTTH && isCopperService) {
+            completed.IM++;
+        } else if (is4G) {
+            completed["4G"]++;
+        } else if (isUG && ["GL", "DU", "HAR", "UNW", "UM", "NF", "IM"].includes(lea)) {
+            completed.UG++;
+        }
+
+        void counts;
+    });
+
+    return completed;
+}
+
 function renderWorkloadChart() {
     const card = document.getElementById('workload-trend-card');
     const message = document.getElementById('workload-trend-message');
@@ -929,34 +990,63 @@ function renderWorkloadChart() {
         UG: 'UG Fault'
     };
 
-    if (!activeCategory || !categoryLabels[activeCategory]) {
+    if (dailySnapshots.length === 0) {
         card.hidden = true;
         return;
     }
 
+    const selectedCategory = activeCategory && categoryLabels[activeCategory] ? activeCategory : null;
     card.hidden = false;
-    title.textContent = `${categoryLabels[activeCategory]} Workload Trend`;
 
-    if (dailySnapshots.length < 2) {
-        container.replaceChildren();
-        message.textContent = 'Save at least two cloud versions today to see workload changes.';
-        return;
+    if (selectedCategory) {
+        title.textContent = `${categoryLabels[selectedCategory]} Workload Trend`;
+        message.textContent = 'Open, acknowledged, pending, and completed tickets. Completed means the ID existed in the previous CSV but is absent from the next CSV.';
+    } else {
+        title.textContent = 'All Information Cards — Workload Trend';
+        message.textContent = 'Combined totals for all information cards. Completed means a ticket ID disappeared from the next CSV snapshot.';
     }
 
-    message.textContent = 'Open, acknowledged, and cleared tickets for this category across today\'s saved versions.';
     google.charts.setOnLoadCallback(() => {
-        const rows = dailySnapshots.map(snapshot => {
-            const counts = updateDashboard(snapshot.tickets, false)[activeCategory];
-            return [formatSnapshotTime(snapshot), counts.Open, counts.Ack, counts.Clear];
+        const rows = dailySnapshots.map((snapshot, index) => {
+            const counts = updateDashboard(snapshot.tickets, false);
+            const selectedCounts = selectedCategory
+                ? counts[selectedCategory]
+                : Object.values(counts).reduce((total, category) => ({
+                    Open: total.Open + category.Open,
+                    Ack: total.Ack + category.Ack,
+                    Clear: total.Clear + category.Clear
+                }), { Open: 0, Ack: 0, Clear: 0 });
+
+            const completed = index === 0
+                ? 0
+                : (() => {
+                    const completedByCategory = getCompletedCounts(
+                        dailySnapshots[index - 1].tickets,
+                        snapshot.tickets
+                    );
+                    return selectedCategory
+                        ? completedByCategory[selectedCategory]
+                        : Object.values(completedByCategory).reduce((sum, value) => sum + value, 0);
+                })();
+
+            return [
+                formatSnapshotTime(snapshot),
+                selectedCounts.Open,
+                selectedCounts.Ack,
+                selectedCounts.Clear,
+                completed
+            ];
         });
+
         const chartData = google.visualization.arrayToDataTable([
-            ['Time', 'Open', 'Acknowledged', 'Clear'],
+            ['Time', 'Open', 'Acknowledged', 'Cleared Status', 'Completed'],
             ...rows
         ]);
+
         const chart = new google.visualization.LineChart(container);
         chart.draw(chartData, {
             backgroundColor: 'transparent',
-            colors: ['#38bdf8', '#fbbf24', '#10b981'],
+            colors: ['#38bdf8', '#fbbf24', '#10b981', '#a78bfa'],
             chartArea: { left: 48, top: 20, width: '88%', height: '72%' },
             hAxis: { textStyle: { color: '#cbd5e1' }, slantedText: true },
             vAxis: { minValue: 0, textStyle: { color: '#cbd5e1' }, gridlines: { color: '#334155' } },
