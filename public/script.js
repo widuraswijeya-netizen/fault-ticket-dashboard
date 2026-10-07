@@ -3,6 +3,7 @@ if (window.google && window.google.charts) {
 }
 
 const PASSWORD_POLICY_MESSAGE = 'Use at least 10 characters with an uppercase letter, a lowercase letter, a number, and a special character.';
+let sessionHeartbeatTimer = null;
 
 function hasStrongPassword(password) {
     return password.length >= 10 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9]/.test(password);
@@ -18,6 +19,16 @@ function setAuthenticatedUser(user) {
     if (overlay) overlay.style.display = validUser ? 'none' : 'flex';
     if (appShell) appShell.style.display = validUser ? 'block' : 'none';
     if (adminPanel) adminPanel.hidden = !validUser || user.role !== 'admin';
+    if (sessionHeartbeatTimer) { clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; }
+    if (validUser) {
+        if (user.role === 'admin') loadAdminUsers();
+        sessionHeartbeatTimer = setInterval(async () => {
+            try {
+                const response = await fetch('/api/me', { credentials: 'include', cache: 'no-store' });
+                if (!response.ok) { clearInterval(sessionHeartbeatTimer); sessionHeartbeatTimer = null; setAuthenticatedUser(null); return; }
+            } catch (error) { console.warn('Session heartbeat failed:', error); }
+        }, 60000);
+    }
 
     return validUser;
 }
@@ -101,51 +112,101 @@ function setupAuth() {
     if (adminForm) {
         adminForm.addEventListener('submit', async event => {
             event.preventDefault();
-
             const serviceNumber = document.getElementById('newUserServiceNumber').value.trim();
             const password = document.getElementById('newUserPassword').value;
             const message = document.getElementById('addUserMessage');
             const submitButton = adminForm.querySelector('button[type="submit"]');
-
-            if (!/^\d{6}$/.test(serviceNumber)) {
-                message.textContent = 'Enter a 6-digit service number.';
-                return;
-            }
-
-            if (!hasStrongPassword(password)) {
-                message.textContent = PASSWORD_POLICY_MESSAGE;
-                return;
-            }
-
+            if (!/^\d{6}$/.test(serviceNumber)) { message.textContent = 'Enter a 6-digit service number.'; return; }
+            if (!hasStrongPassword(password)) { message.textContent = PASSWORD_POLICY_MESSAGE; return; }
             submitButton.disabled = true;
             message.textContent = 'Creating account...';
-
             try {
                 const response = await fetch('/api/admin/users', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
                     body: JSON.stringify({ serviceNumber, password })
                 });
-
                 const result = await response.json().catch(() => ({}));
-                if (!response.ok) {
-                    message.textContent = result.error || 'Could not create the account.';
-                    return;
-                }
-
+                if (!response.ok) { message.textContent = result.error || 'Could not create the account.'; return; }
                 adminForm.reset();
                 message.textContent = `Account created for service number ${serviceNumber}.`;
+                await loadAdminUsers();
             } catch (error) {
                 console.error('Create user failed:', error);
                 message.textContent = 'Unable to contact the authentication service.';
-            } finally {
-                submitButton.disabled = false;
-            }
+            } finally { submitButton.disabled = false; }
         });
     }
-
+    const refreshUsersBtn = document.getElementById('refreshUsersBtn');
+    if (refreshUsersBtn) refreshUsersBtn.addEventListener('click', loadAdminUsers);
     restoreDashboardSession();
+}
+
+async function loadAdminUsers() {
+    const body = document.getElementById('adminUsersBody');
+    if (!body) return;
+    try {
+        const response = await fetch('/api/admin/users', { credentials: 'include', cache: 'no-store' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to load users.');
+        body.replaceChildren();
+        (result.users || []).forEach(user => {
+            const row = document.createElement('tr');
+            const service = document.createElement('td'); service.textContent = user.service_number;
+            const role = document.createElement('td'); role.textContent = user.role;
+            const statusCell = document.createElement('td');
+            const badge = document.createElement('span');
+            badge.className = user.online ? 'user-status online' : 'user-status offline';
+            badge.textContent = user.online ? 'Online' : (user.active ? 'Offline' : 'Removed');
+            statusCell.appendChild(badge);
+            const seen = document.createElement('td');
+            seen.textContent = user.online ? 'Active now' : (user.updated_at ? new Date(user.updated_at).toLocaleString() : '—');
+            const actions = document.createElement('td');
+            if (user.role === 'admin') {
+                actions.textContent = 'Administrator';
+            } else {
+                const reset = document.createElement('button');
+                reset.type = 'button'; reset.className = 'admin-action-btn reset'; reset.textContent = 'Reset Password';
+                reset.onclick = () => resetTechnicianPassword(user.service_number);
+                const remove = document.createElement('button');
+                remove.type = 'button'; remove.className = 'admin-action-btn remove'; remove.textContent = 'Remove';
+                remove.onclick = () => removeTechnician(user.service_number);
+                actions.append(reset, remove);
+            }
+            row.append(service, role, statusCell, seen, actions);
+            body.appendChild(row);
+        });
+        if (!body.children.length) body.innerHTML = '<tr><td colspan="5">No user accounts found.</td></tr>';
+    } catch (error) {
+        console.error('Load users failed:', error);
+        body.innerHTML = `<tr><td colspan="5">${error.message || 'Unable to load users.'}</td></tr>`;
+    }
+}
+
+async function resetTechnicianPassword(serviceNumber) {
+    const password = window.prompt(`Enter a new password for ${serviceNumber}.\\n\\nAt least 10 characters: uppercase, lowercase, number and special character.`);
+    if (password === null) return;
+    if (!hasStrongPassword(password)) { showToast(PASSWORD_POLICY_MESSAGE, 'warning', 7000); return; }
+    try {
+        const response = await fetch('/api/admin/users/reset-password', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+            body: JSON.stringify({ serviceNumber, password })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to reset password.');
+        showToast(`Password reset for ${serviceNumber}. The technician must log in again.`, 'success', 6000);
+        await loadAdminUsers();
+    } catch (error) { showToast(error.message || 'Unable to reset password.', 'error', 7000); }
+}
+
+async function removeTechnician(serviceNumber) {
+    if (!window.confirm(`Remove technician account ${serviceNumber}? This will also sign out that technician.`)) return;
+    try {
+        const response = await fetch('/api/admin/users/' + encodeURIComponent(serviceNumber), { method: 'DELETE', credentials: 'include' });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Unable to remove user.');
+        showToast(`Technician ${serviceNumber} was removed.`, 'success');
+        await loadAdminUsers();
+    } catch (error) { showToast(error.message || 'Unable to remove user.', 'error', 7000); }
 }
 
 function showToast(message, type = 'info', duration = 4000) {
