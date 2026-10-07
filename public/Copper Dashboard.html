@@ -13,9 +13,14 @@
 </head>
 
 <body>
-    <div id="dashboardLoginOverlay" class="login-overlay" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.72); display: flex; align-items: center; justify-content: center; z-index: 9999;">
-        <div style="background:#fff; border-radius:16px; box-shadow:0 20px 60px rgba(15,23,42,0.25); width:min(440px, calc(100% - 32px)); padding:30px;">
-            <h2 style="margin-bottom: 18px; color:#1d4ed8;">Technician Login</h2>
+    <div id="dashboardLoginOverlay" class="login-overlay">
+        <video class="login-background-video" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+            <source src="/Dashboard_video.mp4" type="video/mp4">
+        </video>
+        <div class="login-video-shade" aria-hidden="true"></div>
+        <div class="login-card">
+            <div class="login-card-content">
+            <h2>Technician Login</h2>
             <form id="dashboardLoginForm">
                 <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
                     <label for="dashboardServiceNumber" style="font-weight:700; color:#374151;">Service Number</label>
@@ -28,6 +33,7 @@
                 <button type="submit" class="modern-btn" style="width:100%; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);">Log In</button>
                 <div id="dashboardLoginError" aria-live="polite" style="min-height:20px; margin-top:12px; color:#b91c1c; font-weight:600;"></div>
             </form>
+            </div>
         </div>
     </div>
 
