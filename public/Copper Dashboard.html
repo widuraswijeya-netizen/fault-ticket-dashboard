@@ -231,6 +231,22 @@
                     <div class="chart-container" id="pendingNeedCpePieChart"></div>
                 </div>
             </div>
+            <div class="info-card dp-alert-card" id="dp-alert-card">
+                <div class="card-header"><span>DP Network Alerts</span><span class="tag">Live</span></div>
+                <div class="dp-alert-summary">
+                    <button type="button" class="dp-alert-metric possible" id="dpPossibleBtn">
+                        <span>Possible DP Faults</span><strong id="dp-possible-count">0</strong>
+                    </button>
+                    <button type="button" class="dp-alert-metric duplicate" id="dpDuplicateBtn">
+                        <span>Duplicate Reports</span><strong id="dp-duplicate-count">0</strong>
+                    </button>
+                    <button type="button" class="dp-alert-metric critical" id="dpCriticalBtn">
+                        <span>3+ Affected Loops</span><strong id="dp-critical-count">0</strong>
+                    </button>
+                </div>
+                <p class="dp-alert-help">Same DP + different loops indicates a possible DP fault. Same DP + same loop indicates duplicate customer reports.</p>
+                <button type="button" id="viewDpAlertsBtn" class="modern-btn dp-alert-view-btn">View DP Alerts</button>
+            </div>
             <div class="info-card trend-card" id="workload-trend-card" hidden>
                 <div class="card-header"><span id="workload-trend-title">Workload Trend</span><span class="tag">Today</span></div>
                 <p id="workload-trend-message" class="trend-message">Combined workload trend is shown by default. Select an information card to focus on that category.</p>
@@ -279,6 +295,24 @@
                 </table>
             </div>
         </section>
+    </div>
+
+    <div id="dpAlertsModal" class="modal-overlay" style="display:none;">
+        <div class="modal-content dp-alert-modal-content">
+            <div class="modal-header">
+                <div>
+                    <h3>DP Network Alerts</h3>
+                    <p class="dp-modal-subtitle">Grouped from current pending copper tickets by DP and loop.</p>
+                </div>
+                <button id="closeDpAlertsBtn" class="modern-btn red-btn" type="button">Close</button>
+            </div>
+            <div class="dp-alert-table-wrap">
+                <table class="dp-alert-table">
+                    <thead><tr><th>Alert</th><th>DP</th><th>Loops</th><th>Tickets</th><th>Team</th></tr></thead>
+                    <tbody id="dpAlertsBody"></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <div id="toastContainer" class="toast-container"></div>
