@@ -824,11 +824,11 @@ function updateDashboard(data, renderResults = true) {
 
     const pendingSummary = summarizePendingAndNeedCpe(data);
     const analyticsPendingEl = document.getElementById('analytics-pending-count');
-    const analyticsClearedEl = document.getElementById('analytics-cleared-count');
+    const analyticsCompletedEl = document.getElementById('analytics-completed-count');
     const analyticsNeedCpeEl = document.getElementById('analytics-need-cpe-count');
     const completedToday = getCumulativeCompletedToday();
     if (analyticsPendingEl) analyticsPendingEl.textContent = pendingSummary.pending;
-    if (analyticsClearedEl) analyticsClearedEl.textContent = completedToday.total;
+    if (analyticsCompletedEl) analyticsCompletedEl.textContent = completedToday.total;
     if (analyticsNeedCpeEl) analyticsNeedCpeEl.textContent = pendingSummary.needCpe;
 
     const updateCard = (cardPrefix, dataCounts) => {
@@ -885,8 +885,8 @@ function updateDashboard(data, renderResults = true) {
         const completedToday = getCumulativeCompletedToday();
         renderPendingNeedCpePieChart(
             pendingSummary.pending,
-            completedToday.total,
-            pendingSummary.needCpe
+            pendingSummary.needCpe,
+            completedToday.total
         );
     });
 
@@ -894,21 +894,22 @@ function updateDashboard(data, renderResults = true) {
     return counts;
 }
 
-function renderPendingNeedCpePieChart(pending, cleared, needCpe) {
+function renderPendingNeedCpePieChart(pending, needCpe, completed) {
     const container = document.getElementById('pendingNeedCpePieChart');
     if (!container) return;
 
     const data = google.visualization.arrayToDataTable([
         ['Group', 'Count'],
         ['Pending', pending],
-        ['Cleared', cleared],
-        ['Need CPE', needCpe]
+        ['Need CPE', needCpe],
+        ['Completed', completed]
     ]);
 
     const options = {
         backgroundColor: 'transparent',
         pieHole: 0.45,
-        colors: ['#475569', '#10b981', '#f59e0b'],
+        colors: ['#475569', '#f59e0b', '#10b981'],
+        pieSliceText: 'percentage',
         legend: {
             position: 'bottom',
             textStyle: { color: '#e2e8f0', fontSize: 11 }
