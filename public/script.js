@@ -975,6 +975,17 @@ function getCompletedCounts(previousTickets, currentTickets) {
         const id = normalizeTicketId(row);
         if (!id || currentIds.has(id)) return;
 
+        // A ticket that was already CLOSED / RESOLVED / CLEARED in the
+        // previous snapshot is already counted as Cleared, not Completed.
+        // Completed must represent tickets that disappeared while still
+        // pending/open/acknowledged, so Cleared and Completed stay separate.
+        const previousStatus = String(row["Status"] || "").trim().toUpperCase();
+        const wasAlreadyCleared =
+            previousStatus.includes("CLOSED") ||
+            previousStatus.includes("RESOLVED") ||
+            previousStatus.includes("CLEARED");
+        if (wasAlreadyCleared) return;
+
         const counts = {};
         const type = (row["SA_SERVICE_TYPE"] || "").trim().toUpperCase();
         const lea = (row["SA_LEA"] || "").trim().toUpperCase();
