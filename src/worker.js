@@ -282,6 +282,10 @@ async function handleCloudState(request, env) {
     const payload = await request.json();
     const tickets = Array.isArray(payload.tickets) ? payload.tickets : [];
     const updatedAt = String(payload.updated_at || new Date().toISOString());
+    const csvModifiedAt = String(payload.csv_modified_at || "");
+    if (!csvModifiedAt || !Number.isFinite(Date.parse(csvModifiedAt))) {
+      return jsonResponse({ error: "A valid CSV modified time is required before cloud upload." }, 400);
+    }
 
     await supabaseRequest(env, "app_state?on_conflict=id", {
       method: "POST",
@@ -317,7 +321,10 @@ async function handleCloudSnapshots(request, env) {
     const payload = await request.json();
     const tickets = Array.isArray(payload.tickets) ? payload.tickets : [];
     const capturedAt = String(payload.captured_at || new Date().toISOString());
-    const csvModifiedAt = payload.csv_modified_at ? String(payload.csv_modified_at) : null;
+    const csvModifiedAt = payload.csv_modified_at ? String(payload.csv_modified_at) : "";
+    if (!csvModifiedAt || !Number.isFinite(Date.parse(csvModifiedAt))) {
+      return jsonResponse({ error: "A valid CSV modified time is required for a cloud snapshot." }, 400);
+    }
 
     await supabaseRequest(env, "app_snapshots", {
       method: "POST",
