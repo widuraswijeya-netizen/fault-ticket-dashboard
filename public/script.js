@@ -729,7 +729,14 @@ function toggleFilter(name) {
 }
 
 function isTicketPending(status) {
-    return !status.includes("CLOSED") && !status.includes("RESOLVED") && !status.includes("CLEARED");
+    // Pending must exactly match the workload shown on the category cards:
+    // OPEN + ACKNOWLEDGED/ASSIGNED. Other/unclassified statuses are not
+    // included in Pending, so the Total Tickets Distribution card always
+    // reconciles with the Open + Ack totals.
+    const normalized = String(status || "").trim().toUpperCase();
+    return normalized.includes("OPEN") ||
+           normalized.includes("ACKNOWLEDGED") ||
+           normalized.includes("ASSIGNED");
 }
 
 function isNeedCpeDescription(description) {
@@ -752,6 +759,7 @@ function summarizePendingAndNeedCpe(data) {
     });
 
     return {
+        // Pending is intentionally the same population as Open + Ack.
         pending,
         needCpe,
         otherPending: Math.max(0, pending - needCpe)
