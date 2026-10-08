@@ -1144,3 +1144,5 @@ tr.critical-alarm td {
     .dp-alert-summary { grid-template-columns: 1fr; }
     .dp-alert-card { min-height: auto; }
 }
+
+.worker-app-download{margin:0 0 18px}.worker-app-download-card{display:flex;align-items:center;gap:16px;padding:16px 18px;border:1px solid rgba(99,102,241,.22);border-radius:18px;background:linear-gradient(135deg,rgba(26,41,66,.98),rgba(15,30,53,.98));box-shadow:0 8px 24px rgba(0,0,0,.22)}.worker-app-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(135deg,#8b5cf6,#6366f1);font-size:25px;flex:0 0 auto}.worker-app-copy{flex:1;min-width:0}.worker-app-copy strong{display:block;color:#fff;font-size:15px}.worker-app-copy span{display:block;color:#a8b2d1;font-size:12px;line-height:1.45;margin-top:3px}.worker-app-download-btn{white-space:nowrap;text-decoration:none;background:linear-gradient(135deg,#8b5cf6,#6366f1)!important;color:#fff!important}.worker-app-download-btn:hover{filter:brightness(1.08)}@media(max-width:700px){.worker-app-download-card{align-items:flex-start;flex-wrap:wrap}.worker-app-download-btn{width:100%;text-align:center}}
