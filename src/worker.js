@@ -397,6 +397,12 @@ export default {
   async fetch(request, env) {
     const apiResponse = await handleApi(request, env);
     if (apiResponse) return apiResponse;
+
+    const url = new URL(request.url);
+    if (url.pathname === "/worker" || url.pathname === "/worker/") {
+      return env.ASSETS.fetch(new Request(new URL("/worker.html", request.url), request));
+    }
+
     return env.ASSETS.fetch(request);
   },
 };
