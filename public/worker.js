@@ -12,7 +12,7 @@ const CATEGORY_DEFS=[
 ];
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}
 function digits(v){return String(v??"").replace(/\D/g,"")}
-function circuitCallNumber(v){var d=digits(v);return d.length<5?"":"091"+d.slice(-5)}
+function circuitCallNumber(v){var d=digits(v);return d.length<9?"":"0"+d.slice(-9)}
 function fmtElapsed(v){var t=Date.parse(v||"");if(!Number.isFinite(t))return "—";var m=Math.max(0,Math.floor((Date.now()-t)/60000)),h=Math.floor(m/60);return h+"h "+(m%60)+"m"}
 function elapsedPct(v){var t=Date.parse(v||"");if(!Number.isFinite(t))return 25;return Math.min(100,Math.max(8,((Date.now()-t)/86400000)*100))}
 function activeTicket(t){var s=String(t.Status||"").toUpperCase();return !["CLOSED","RESOLVED","CLEARED","COMPLETED"].includes(s)}
