@@ -74,7 +74,10 @@ async function restoreDashboardSession() {
 
         const result = await response.json();
         const valid = setAuthenticatedUser(result.user);
-        if (valid) await loadCloudData();
+        if (valid) {
+            await loadCloudData();
+            startCloudUpdateAlertMonitor();
+        }
         return valid;
     } catch (error) {
         console.error('Unable to restore login session:', error);
@@ -97,6 +100,7 @@ function setupAuth() {
 
             form.reset();
             await loadCloudData();
+            startCloudUpdateAlertMonitor();
         });
     }
 
@@ -454,6 +458,9 @@ async function loadCloudData() {
             renderTable();
 
             if (data.updated_at) {
+                // Establish the current version silently. Future versions trigger
+                // exactly one bell/notification per logged-in browser.
+                cloudAlertBaseline = String(data.updated_at);
                 const updateTime = new Date(data.updated_at);
                 const formattedTime = updateTime.getFullYear() + '-' +
                     String(updateTime.getMonth() + 1).padStart(2, '0') + '-' +
@@ -641,6 +648,97 @@ const columnsToShow = [
 ];
 
 let fullData = [];
+
+// Cloud-update notification state.
+// Each distinct cloud update is announced at most once per browser profile.
+let cloudAlertTimer = null;
+let cloudAlertBaseline = null;
+let cloudAlertAudio = null;
+
+function prepareCloudUpdateAlerts() {
+    if (!cloudAlertAudio) {
+        cloudAlertAudio = new Audio("https://www.myinstants.com/media/sounds/school-bell_f0L9NQQ.mp3");
+        cloudAlertAudio.preload = "auto";
+    }
+
+    // Ask only after the user has logged in / interacted with the dashboard.
+    if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission().catch(() => {});
+    }
+}
+
+function announceCloudUpdate(updatedAt) {
+    const updateKey = String(updatedAt || "").trim();
+    if (!updateKey || updateKey === cloudAlertBaseline) return;
+
+    const storageKey = "gl-dashboard-last-cloud-alert";
+    let lastAlerted = "";
+    try { lastAlerted = localStorage.getItem(storageKey) || ""; } catch (_) {}
+
+    // Prevent duplicate bells/notifications for the same cloud version.
+    if (lastAlerted === updateKey) return;
+    try { localStorage.setItem(storageKey, updateKey); } catch (_) {}
+
+    if (cloudAlertAudio) {
+        cloudAlertAudio.currentTime = 0;
+        cloudAlertAudio.play().catch(() => {
+            // Browser autoplay policy may block sound until the next user gesture.
+        });
+    }
+
+    if ("Notification" in window && Notification.permission === "granted") {
+        try {
+            new Notification("GL Fault Dashboard", {
+                body: "New fault data has been uploaded. Tap to view the latest faults.",
+                tag: "gl-fault-dashboard-update",
+                renotify: false
+            });
+        } catch (_) {}
+    }
+
+    showToast("🔔 New fault data has been uploaded. Dashboard updated.", "info", 7000);
+}
+
+async function checkForCloudUpdate() {
+    try {
+        const response = await fetch("/api/cloud/state", {
+            credentials: "include",
+            cache: "no-store"
+        });
+        if (!response.ok) return;
+
+        const data = await response.json().catch(() => ({}));
+        const updatedAt = String(data?.updated_at || "").trim();
+        if (!updatedAt) return;
+
+        if (cloudAlertBaseline === null) {
+            cloudAlertBaseline = updatedAt;
+            return;
+        }
+
+        if (updatedAt !== cloudAlertBaseline) {
+            cloudAlertBaseline = updatedAt;
+            if (Array.isArray(data.tickets) && data.tickets.length > 0) {
+                fullData = data.tickets;
+                viewingHistoricalSnapshot = false;
+                updateDashboard(fullData);
+                renderTable();
+            }
+            updateCsvModifiedDisplay(data.csv_modified_at || null);
+            announceCloudUpdate(updatedAt);
+            await loadDailySnapshots();
+        }
+    } catch (error) {
+        console.debug("Cloud update check skipped:", error);
+    }
+}
+
+function startCloudUpdateAlertMonitor() {
+    prepareCloudUpdateAlerts();
+    if (cloudAlertTimer) clearInterval(cloudAlertTimer);
+    cloudAlertTimer = setInterval(checkForCloudUpdate, 30000);
+}
+ 
 let activeFilters = {
     GLDU: false,
     GLDUFTTH: false,
