@@ -1160,9 +1160,11 @@ function buildDpAlertAnalysis(data) {
     const groups = new Map();
 
     (data || []).forEach(row => {
-        const type = String(row["SA_SERVICE_TYPE"] || "").toUpperCase();
         const status = String(row["Status"] || "").toUpperCase();
-        if (!getIsCopperService(type) || !isTicketPending(status)) return;
+        // DP alerts apply to all pending services, including FTTH.
+        // A DP fault can affect multiple access technologies, so this
+        // analysis must not be restricted to Copper service types.
+        if (!isTicketPending(status)) return;
 
         const parsed = parseDpLoop(row["SA_DP_LOOP"]);
         if (!parsed) return;
@@ -1253,7 +1255,7 @@ function showDpAlerts() {
     body.innerHTML = "";
     if (!analysis.alerts.length) {
         const tr = document.createElement("tr");
-        tr.innerHTML = '<td colspan="5" class="dp-no-alerts">No DP fault patterns or duplicate reports detected in current pending copper tickets.</td>';
+        tr.innerHTML = '<td colspan="5" class="dp-no-alerts">No DP fault patterns or duplicate reports detected in current pending tickets.</td>';
         body.appendChild(tr);
     } else {
         analysis.alerts.forEach(alert => {
