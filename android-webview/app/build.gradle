@@ -1,0 +1,5 @@
+plugins { id 'com.android.application' }
+
+android { namespace 'lk.slt.glopmc.fieldworker'; compileSdk 35
+    defaultConfig { applicationId 'lk.slt.glopmc.fieldworker'; minSdk 23; targetSdk 35; versionCode 1; versionName '1.0' }
+}
