@@ -1161,10 +1161,13 @@ function buildDpAlertAnalysis(data) {
 
     (data || []).forEach(row => {
         const status = String(row["Status"] || "").toUpperCase();
-        // DP alerts apply to all pending services, including FTTH.
-        // A DP fault can affect multiple access technologies, so this
-        // analysis must not be restricted to Copper service types.
-        if (!isTicketPending(status)) return;
+        const saLea = String(row["SA_LEA"] || "").trim().toUpperCase();
+        const allowedDpLeas = new Set(["DU", "GL", "UNW", "HAR", "IM", "NF", "UM"]);
+
+        // DP Network Alerts are only required for these SA_LEA areas.
+        // Keep all service types eligible (Copper, FTTH, etc.), but exclude
+        // pending tickets outside the requested SA_LEA list.
+        if (!allowedDpLeas.has(saLea) || !isTicketPending(status)) return;
 
         const parsed = parseDpLoop(row["SA_DP_LOOP"]);
         if (!parsed) return;
