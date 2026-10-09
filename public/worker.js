@@ -1,4 +1,4 @@
-let currentUser=null,tickets=[],selectedTicket=null,selectedCategory=null,selectedStatusFilter=null;
+let currentUser=null,tickets=[],selectedTicket=null,selectedCategory=null,selectedStatusFilter=null,csvUpdatedAt=null;
 const $=id=>document.getElementById(id);
 const CATEGORY_DEFS=[
  {id:"GLDUFTTH",title:"GL / DU",tag:"FTTH",sub:"GL or DU FTTH faults"},
@@ -33,11 +33,12 @@ function classify(t){
  if(lea==="IM")return "IM";
  return null;
 }
+function renderUpdateTime(){var el=$("csvUpdateTime");if(!el)return;if(!csvUpdatedAt){el.textContent="CSV update time unavailable";return}var dt=new Date(csvUpdatedAt);el.textContent=Number.isNaN(dt.getTime())?"CSV update time unavailable":"CSV data updated: "+dt.toLocaleString(undefined,{year:"numeric",month:"short",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:true})}
 function showLogin(){$("loginScreen").hidden=false;$("app").hidden=true}
 function showApp(){$("loginScreen").hidden=true;$("app").hidden=false;$("userLabel").textContent=currentUser?"Service "+currentUser.serviceNumber:"";$("menuUser").textContent=currentUser?"Service Number: "+currentUser.serviceNumber:"";renderCategories();showCategoryView()}
 async function login(serviceNumber,password){var r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({serviceNumber,password})}),d=await r.json().catch(()=>({}));if(!r.ok||!d.user)throw new Error(d.error||"Login failed.");currentUser=d.user;showApp();await loadFaults()}
 async function loadSession(){var r=await fetch("/api/me",{credentials:"include",cache:"no-store"});if(!r.ok){showLogin();return}var d=await r.json();currentUser=d.user;if(!currentUser){showLogin();return}showApp();await loadFaults()}
-async function loadFaults(){try{var r=await fetch("/api/cloud/state",{credentials:"include",cache:"no-store"}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Unable to load cloud faults.");tickets=Array.isArray(d&&d.tickets)?d.tickets.filter(activeTicket):[];renderCategories();if(selectedCategory)renderFaults()}catch(e){console.error(e);$("categoryGrid").innerHTML='<div class="empty-state">'+esc(e.message||"Unable to load faults.")+"</div>"}}
+async function loadFaults(){try{var r=await fetch("/api/cloud/state",{credentials:"include",cache:"no-store"}),d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"Unable to load cloud faults.");tickets=Array.isArray(d&&d.tickets)?d.tickets.filter(activeTicket):[];csvUpdatedAt=d&&d.updated_at?d.updated_at:null;renderUpdateTime();renderCategories();if(selectedCategory)renderFaults()}catch(e){console.error(e);$("categoryGrid").innerHTML='<div class="empty-state">'+esc(e.message||"Unable to load faults.")+"</div>"}}
 function categoryRows(id){return tickets.filter(t=>classify(t)===id)}
 function statusCounts(rows){return rows.reduce((a,t)=>{var s=String(t.Status||"").toUpperCase();if(isClearedStatus(s))a.cleared++;else if(s.includes("ACKNOWLEDGED")||s.includes("ACKNOWLAGHED")||s.includes("ASSIGNED"))a.ack++;else if(s.includes("OPEN"))a.open++;return a},{open:0,ack:0,cleared:0})}
 function renderCategories(){
