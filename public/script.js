@@ -920,10 +920,12 @@ function updateDashboard(data, renderResults = true) {
         const isUnwHarDpLoopStart = dpLoop.startsWith("UNW") || dpLoop.startsWith("HAR");
 
         if (isFTTH) {
-            if (["GL", "DU"].includes(lea)) {
-                updateStatusCounts(counts.GLDUFTTH, status, alarmStatus);
-            } else if (["UNW", "HAR", "IM"].includes(lea)) {
+            // UNW/HAR DP-loop prefixes take precedence over SA_LEA for FTTH,
+            // matching the existing copper team-routing rule.
+            if (isUnwHarDpLoopStart || ["UNW", "HAR", "IM"].includes(lea)) {
                 updateStatusCounts(counts.UNWHARIMFTTH, status, alarmStatus);
+            } else if (["GL", "DU"].includes(lea)) {
+                updateStatusCounts(counts.GLDUFTTH, status, alarmStatus);
             }
         }
         else if (isUnwHarDpLoopStart && !isUG && !isFTTH && isCopperService) {
@@ -1424,12 +1426,12 @@ function renderTable() {
             }
         }
         else if (activeFilters["GLDU"]) {
-            if (["GL", "DU"].includes(lea) && !isUG && !is4G && !isFTTH && isCopperService) {
+            if (["GL", "DU"].includes(lea) && !isUnwHarDpLoopStart && !isUG && !is4G && !isFTTH && isCopperService) {
                 show = true;
             }
         }
-        else if (activeFilters["GLDUFTTH"] && ["GL", "DU"].includes(lea) && isFTTH) show = true;
-        else if (activeFilters["UNWHARIMFTTH"] && isFTTH && ["UNW", "HAR", "IM"].includes(lea)) show = true;
+        else if (activeFilters["GLDUFTTH"] && ["GL", "DU"].includes(lea) && !isUnwHarDpLoopStart && isFTTH) show = true;
+        else if (activeFilters["UNWHARIMFTTH"] && isFTTH && (isUnwHarDpLoopStart || ["UNW", "HAR", "IM"].includes(lea))) show = true;
         else if (activeFilters["UMNF"]) {
             if (["UM", "NF"].includes(lea) && !isUG && !is4G && !isFTTH && isCopperService) {
                 show = true;
