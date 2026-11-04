@@ -80,7 +80,7 @@
     </div>
         </header>
 
-        <section class="upload-panel">
+        <section class="upload-panel upload-capacity-layout">
             <div class="upload-card">
                 <label class="file-upload">
                     <span class="upload-icon">📄</span>
@@ -89,7 +89,18 @@
                 </label>
                 <p class="upload-help">Supported file type: .csv</p>
             </div>
+            <aside class="supabase-capacity-card" aria-live="polite">
+                <div class="capacity-heading"><strong>Supabase database storage</strong><span id="supabase-capacity-status">Checking…</span></div>
+                <div class="capacity-values"><strong id="supabase-used">—</strong><span id="supabase-remaining">Remaining: —</span></div>
+                <div class="capacity-track"><span id="supabase-capacity-bar"></span></div>
+                <small id="supabase-capacity-note">Live database usage • Free plan allowance</small>
+            </aside>
         </section>
+        <nav class="dashboard-tabs" aria-label="Dashboard sections">
+            <button type="button" class="dashboard-tab active" data-tab="mainDashboardTab">Main Dashboard</button>
+            <button type="button" class="dashboard-tab" data-tab="reportsTab">Reports &amp; Trends</button>
+        </nav>
+        <section id="mainDashboardTab" class="dashboard-tab-panel">
 
         <section class="worker-app-download" aria-label="Field Worker mobile app">
             <div class="worker-app-download-card">
@@ -258,13 +269,25 @@
                 <p class="dp-alert-help">Same DP + different loops indicates a possible DP fault. Same DP + same loop indicates duplicate customer reports.</p>
                 <button type="button" id="viewDpAlertsBtn" class="modern-btn dp-alert-view-btn">View DP Alerts</button>
             </div>
-            <div class="info-card trend-card" id="workload-trend-card" hidden>
-                <div class="card-header"><span id="workload-trend-title">Workload Trend</span><span class="tag">Today</span></div>
-                <p id="workload-trend-message" class="trend-message">Combined workload trend is shown by default. Select an information card to focus on that category.</p>
-                <div class="chart-container trend-chart-container" id="workloadTrendChart"></div>
-            </div>
         </section>
 
+        </section>
+        <section id="reportsTab" class="dashboard-tab-panel" hidden>
+            <section class="info-card trend-card reports-trend-card" id="workload-trend-card">
+                <div class="reports-heading">
+                    <div><h2 id="workload-trend-title">Four-Week Workload Trend</h2><p id="workload-trend-message" class="trend-message">Daily saved snapshots for all categories.</p></div>
+                    <label class="reports-category-control">Category
+                        <select id="trendCategorySelect" class="modern-dropdown">
+                            <option value="ALL">All categories combined</option><option value="GLDU">GL/DU Copper</option><option value="GLDUFTTH">GL/DU FTTH</option><option value="UNWHAR">UNW/HAR Copper</option><option value="UNWHARIMFTTH">UNW/HAR/IM FTTH</option><option value="UMNF">UM/NF</option><option value="IM">IM</option><option value="4G">4G</option><option value="UG">UG Fault</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="chart-container trend-chart-container" id="workloadTrendChart"></div>
+                <div class="table-wrap trend-table-wrap"><table class="trend-report-table">
+                    <thead><tr><th>Snapshot date</th><th>Open</th><th>Acknowledged</th><th>Cleared</th><th>Completed (cumulative)</th></tr></thead>
+                    <tbody id="trendReportBody"><tr><td colspan="5">Loading four-week history…</td></tr></tbody>
+                </table></div>
+            </section>
         <section class="table-panel">
             <div class="table-headline">
                 <div>
@@ -278,6 +301,7 @@
                     <tbody></tbody>
                 </table>
             </div>
+        </section>
         </section>
 
 <section id="adminUserPanel" class="admin-user-panel" hidden>
