@@ -96,12 +96,6 @@
                 <small id="supabase-capacity-note">Live database usage • Free plan allowance</small>
             </aside>
         </section>
-        <nav class="dashboard-tabs" aria-label="Dashboard sections">
-            <button type="button" class="dashboard-tab active" data-tab="mainDashboardTab">Main Dashboard</button>
-            <button type="button" class="dashboard-tab" data-tab="reportsTab">Reports &amp; Trends</button>
-        </nav>
-        <section id="mainDashboardTab" class="dashboard-tab-panel">
-
         <section class="worker-app-download" aria-label="Field Worker mobile app">
             <div class="worker-app-download-card">
                 <div class="worker-app-icon">📱</div>
@@ -272,23 +266,11 @@
         </section>
 
         </section>
-        </section>
-        <section id="reportsTab" class="dashboard-tab-panel" hidden>
-            <section class="info-card trend-card reports-trend-card" id="workload-trend-card">
-                <div class="reports-heading">
-                    <div><h2 id="workload-trend-title">Four-Week Workload Trend</h2><p id="workload-trend-message" class="trend-message">Daily saved snapshots for all categories.</p></div>
-                    <label class="reports-category-control">Category
-                        <select id="trendCategorySelect" class="modern-dropdown">
-                            <option value="ALL">All categories combined</option><option value="GLDU">GL/DU Copper</option><option value="GLDUFTTH">GL/DU FTTH</option><option value="UNWHAR">UNW/HAR Copper</option><option value="UNWHARIMFTTH">UNW/HAR/IM FTTH</option><option value="UMNF">UM/NF</option><option value="IM">IM</option><option value="4G">4G</option><option value="UG">UG Fault</option>
-                        </select>
-                    </label>
-                </div>
+            <div class="info-card trend-card" id="workload-trend-card" hidden>
+                <div class="card-header"><span id="workload-trend-title">Workload Trend</span><span class="tag">Today</span></div>
+                <p id="workload-trend-message" class="trend-message">Combined workload trend is shown by default. Select an information card to focus on that category.</p>
                 <div class="chart-container trend-chart-container" id="workloadTrendChart"></div>
-                <div class="table-wrap trend-table-wrap"><table class="trend-report-table">
-                    <thead><tr><th>Snapshot date</th><th>Open</th><th>Acknowledged</th><th>Cleared</th><th>Completed (cumulative)</th></tr></thead>
-                    <tbody id="trendReportBody"><tr><td colspan="5">Loading four-week history…</td></tr></tbody>
-                </table></div>
-            </section>
+            </div>
         <section class="table-panel">
             <div class="table-headline">
                 <div>
@@ -304,6 +286,8 @@
             </div>
         </section>
         </section>
+
+
 
 <section id="adminUserPanel" class="admin-user-panel" hidden>
             <div class="admin-panel-heading">
@@ -353,6 +337,5 @@
 
     <div id="toastContainer" class="toast-container"></div>
     <script src="script.js"></script>
-    <script src="reports.js"></script>
 </body>
 </html>
