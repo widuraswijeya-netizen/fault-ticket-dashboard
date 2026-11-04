@@ -268,6 +268,21 @@ async function requireSession(request, env) {
   return user;
 }
 
+async function handleCloudUsage(request, env) {
+  if (request.method !== "GET") return jsonResponse({ error: "Method not allowed." }, 405);
+  const user = await requireSession(request, env);
+  if (!user) return jsonResponse({ error: "Authentication required." }, 401);
+  try {
+    const result = await supabaseRequest(env, "rpc/dashboard_database_usage", { method: "POST", body: {} });
+    const usedBytes = Number(Array.isArray(result) ? result[0]?.used_bytes : result?.used_bytes);
+    if (!Number.isFinite(usedBytes)) throw new Error("Database usage function returned an invalid result.");
+    return jsonResponse({ used_bytes: usedBytes, limit_bytes: 500 * 1024 * 1024 });
+  } catch (error) {
+    console.error("Supabase usage request failed:", error);
+    return jsonResponse({ error: String(error.message || error) }, 502);
+  }
+}
+
 async function handleCloudState(request, env) {
   const user = await requireSession(request, env);
   if (!user) return jsonResponse({ error: "Authentication required." }, 401);
@@ -388,6 +403,7 @@ async function handleApi(request, env) {
   if (url.pathname === "/api/admin/users" && request.method === "POST") return handleAdminCreateUser(request, env);
   if (url.pathname === "/api/admin/users/reset-password") return handleAdminResetPassword(request, env);
   if (url.pathname.startsWith("/api/admin/users/") && request.method === "DELETE") return handleAdminRemoveUser(request, env, decodeURIComponent(url.pathname.slice("/api/admin/users/".length)));
+  if (url.pathname === "/api/cloud/usage") return handleCloudUsage(request, env);
   if (url.pathname === "/api/cloud/state") return handleCloudState(request, env);
   if (url.pathname === "/api/cloud/snapshots") return handleCloudSnapshots(request, env);
   return null;
