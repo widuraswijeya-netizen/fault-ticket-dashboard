@@ -73,8 +73,36 @@
         return sum;
       }, { Open: 0, Ack: 0, Clear: 0 });
       if (index > 0) {
-        const completed = getCompletedCounts(dailySnapshots[index - 1].tickets || [], snapshot.tickets || []);
-        cumulativeCompleted += category ? (completed[category] || 0) : CATEGORY_KEYS.reduce((sum, key) => sum + (completed[key] || 0), 0);
+        const previousTickets = dailySnapshots[index - 1].tickets || [];
+        const currentIds = new Set((snapshot.tickets || []).map(normalizeTicketId).filter(Boolean));
+        const completed = Object.fromEntries(CATEGORY_KEYS.map(key => [key, 0]));
+        previousTickets.forEach(ticket => {
+          const id = normalizeTicketId(ticket);
+          const oldStatus = String(ticket.Status || '').trim().toUpperCase();
+          if (!id || currentIds.has(id) || oldStatus.includes('CLOSED') || oldStatus.includes('RESOLVED') || oldStatus.includes('CLEARED')) return;
+          const type = String(ticket.SA_SERVICE_TYPE || '').trim().toUpperCase();
+          const lea = String(ticket.SA_LEA || '').trim().toUpperCase();
+          const isUG = String(ticket['Assigned WG'] || '').toUpperCase().includes('CDM');
+          const assigned = String(ticket['Assigned WG'] || '').toUpperCase();
+          const circuit = String(ticket['Circuit Display Name'] || '').toUpperCase();
+          const dp = String(ticket.SA_DP_LOOP || '').trim().toUpperCase();
+          const copper = getIsCopperService(type);
+          const ftth = type.includes('FTTH');
+          const is4G = !copper && (assigned.includes('LTE') || circuit.includes('0913') || circuit.includes('94913'));
+          const unwHarDp = dp.startsWith('UNW') || dp.startsWith('HAR');
+          let key = null;
+          if (ftth) {
+            if (unwHarDp || ['UNW', 'HAR', 'IM'].includes(lea)) key = 'UNWHARIMFTTH';
+            else if (['GL', 'DU'].includes(lea)) key = 'GLDUFTTH';
+          } else if (unwHarDp && !isUG && copper) key = 'UNWHAR';
+          else if (['GL', 'DU'].includes(lea) && !isUG && !is4G && copper) key = 'GLDU';
+          else if (['UM', 'NF'].includes(lea) && !isUG && !is4G && copper) key = 'UMNF';
+          else if (lea === 'IM' && !isUG && !is4G && copper) key = 'IM';
+          else if (is4G) key = '4G';
+          else if (isUG && ['GL', 'DU', 'HAR', 'UNW', 'UM', 'NF', 'IM'].includes(lea)) key = 'UG';
+          if (key) completed[key]++;
+        });
+        cumulativeCompleted += category ? (completed[category] || 0) : CATEGORY_KEYS.reduce((sum, key) => sum + completed[key], 0);
       }
       const stamp = new Date(snapshot.captured_at);
       const label = stamp.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
