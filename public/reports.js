@@ -52,6 +52,9 @@
     const title = document.getElementById('workload-trend-title');
     const message = document.getElementById('workload-trend-message');
     if (!chart || !body || !title || !message) return;
+    if (!window.google?.visualization && window.google?.charts) {
+      google.charts.setOnLoadCallback(() => window.renderWorkloadChart());
+    }
     if (!dailySnapshots || !dailySnapshots.length) {
       title.textContent = 'Four-Week Workload Trend';
       message.textContent = 'No saved snapshots are available for the last four weeks.';
@@ -179,6 +182,13 @@
     document.getElementById('trendCategorySelect')?.addEventListener('change', renderWorkloadChart);
     // Login may complete after this script runs, so retry while the dashboard session is active.
     loadSupabaseUsage();
+    const appShell = document.querySelector('.app-shell');
+    if (appShell && window.MutationObserver) {
+      const authObserver = new MutationObserver(() => {
+        if (appShell.style.display !== 'none') loadSupabaseUsage();
+      });
+      authObserver.observe(appShell, { attributes: true, attributeFilter: ['style'] });
+    }
     setInterval(() => {
       if (document.querySelector('.app-shell')?.style.display !== 'none') loadSupabaseUsage();
     }, 60000);
